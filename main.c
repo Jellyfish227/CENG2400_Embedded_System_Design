@@ -13,7 +13,7 @@
 #define W_DELAY 150
 #define RGB_DELAY 1500
 
-volatile uint8_t g_flash_LED = 0;
+uint8_t g_flash_LED = 0;
 bool timer1finish = 1;
 bool timer0finish = 1;
 
