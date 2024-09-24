@@ -87,7 +87,7 @@ void Timer0IntHandler(void)
 void Flash_Timer(void)
 {
     // TODO: Implement this function similar to RGB_Timer()
-    static enum {W, W_wait} next_state;
+    static enum {W, W_wait, OFF, OFF_wait} next_state;
     if (g_flash_LED == 1) {
         // GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_1);
         // SysCtlDelay(W_DELAY);
@@ -96,10 +96,21 @@ void Flash_Timer(void)
         switch (next_state) {
             case W:
                 GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_1);
+                timer0finish = 0;
                 TimerEnable(TIMER0_BASE, TIMER_A);
                 next_state = W_wait;
                 break;
             case W_wait:
+                if (timer0finish)
+                    next_state = OFF;
+                break;
+            case OFF:
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
+                timer0finish = 0;
+                TimerEnable(TIMER0_BASE, TIMER_A);
+                next_state = OFF_wait;
+                break;
+            case OFF_wait:
                 if (timer0finish)
                     next_state = W;
                 break;
