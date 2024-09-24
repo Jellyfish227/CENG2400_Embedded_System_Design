@@ -53,16 +53,9 @@ void initialization(void)
 }
 
 // TODO: Using GPIO Interrupt to replace the function Read_Switches_Timer()
-/* void Read_Switches_Timer(void)
+void PORTD_IRQHandler(void)
 {
-    if (GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4))
-        g_flash_LED = 0;
-    else
-        g_flash_LED = 1;
-} */
-
-void PORTD_IRQHandler(void) {
-    if (GPIO_PORTD_RIS_R & MASK(GPIO_PIN_4))
+    if (GPIO_PORTF_RIS_R & MASK(GPIO_PIN_4))
     {
         if (GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4))
             g_flash_LED = 0;
@@ -70,7 +63,7 @@ void PORTD_IRQHandler(void) {
             g_flash_LED = 1;
     }
     // Clear the interrupt flag
-    PORTD->ISFR = 0xffffffff;
+    GPIO_PORTF_RIS_R = 0xffffffff;
 }
 
 void Timer1IntHandler(void)
@@ -90,10 +83,6 @@ void Flash_Timer(void)
     // TODO: Implement this function similar to RGB_Timer()
     static enum {W, W_wait, OFF, OFF_wait} next_state;
     if (g_flash_LED == 1) {
-        // GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_1);
-        // SysCtlDelay(W_DELAY);
-        // GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
-        // SysCtlDelay(W_DELAY);
         switch (next_state) {
             case W:
                 GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_1);
