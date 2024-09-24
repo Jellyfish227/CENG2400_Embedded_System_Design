@@ -29,7 +29,9 @@ void initialization(void)
     GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
     GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4 | GPIO_PIN_0);
     GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
-
+    GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_FALLING_EDGE);
+    GPIOIntEnable(GPIO_PORTF_BASE, GPIO_PIN_4);
+    GPIOIntRegister(GPIO_PORTF_BASE, PORTF_IRQHandler);
     // Configure Timer1
     SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER1);
     TimerConfigure(TIMER1_BASE, TIMER_CFG_ONE_SHOT);
@@ -53,17 +55,20 @@ void initialization(void)
 }
 
 // TODO: Using GPIO Interrupt to replace the function Read_Switches_Timer()
-void PORTD_IRQHandler(void)
+void PORTF_IRQHandler(void)
 {
-    if (GPIO_PORTF_RIS_R & MASK(GPIO_PIN_4))
+    // Check if the interrupt was triggered by PD4
+    if (GPIOIntStatus(GPIO_PORTF_BASE, true) & GPIO_INT_PIN_4)
     {
+        // Toggle the LED or perform your action
         if (GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4))
-            g_flash_LED = 0;
+            g_flash_LED = 0; // Button released
         else
-            g_flash_LED = 1;
+            g_flash_LED = 1; // Button pressed
+
+        // Clear the interrupt flag
+        GPIOIntClear(GPIO_PORTF_BASE, GPIO_INT_PIN_4);
     }
-    // Clear the interrupt flag
-    GPIO_PORTF_RIS_R = 0xffffffff;
 }
 
 void Timer1IntHandler(void)
