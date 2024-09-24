@@ -21,6 +21,7 @@ uint32_t ui32Period;
 
 void Timer1IntHandler(void);
 void Timer0IntHandler(void);
+void PORTF_IRQHandler(void);
 
 void initialization(void)
 {
@@ -66,9 +67,9 @@ void PORTF_IRQHandler(void)
         else
             g_flash_LED = 1; // Button pressed
 
-        // Clear the interrupt flag
-        GPIOIntClear(GPIO_PORTF_BASE, GPIO_INT_PIN_4);
     }
+    // Clear the interrupt flag
+    GPIOIntClear(GPIO_PORTF_BASE, GPIO_INT_PIN_4);
 }
 
 void Timer1IntHandler(void)
@@ -90,7 +91,7 @@ void Flash_Timer(void)
     if (g_flash_LED == 1) {
         switch (next_state) {
             case W:
-                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_1);
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
                 timer0finish = 0;
                 TimerEnable(TIMER0_BASE, TIMER_A);
                 next_state = W_wait;
