@@ -62,7 +62,8 @@ void initialization(void)
 } */
 
 void PORTD_IRQHandler(void) {
-    if (PORTD->ISFR && MASK(GPIO_PIN_4)) {
+    if (GPIO_PORTD_RIS_R & MASK(GPIO_PIN_4))
+    {
         if (GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4))
             g_flash_LED = 0;
         else
