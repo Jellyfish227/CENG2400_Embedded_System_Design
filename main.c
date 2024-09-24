@@ -30,9 +30,11 @@ void initialization(void)
     GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
     GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4 | GPIO_PIN_0);
     GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
-    GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_FALLING_EDGE);
+
+    GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_BOTH_EDGES);
     GPIOIntEnable(GPIO_PORTF_BASE, GPIO_PIN_4);
     GPIOIntRegister(GPIO_PORTF_BASE, PORTF_IRQHandler);
+
     // Configure Timer1
     SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER1);
     TimerConfigure(TIMER1_BASE, TIMER_CFG_ONE_SHOT);
@@ -170,6 +172,7 @@ void RGB_Timer(void)
 int main(void)
 {
     initialization();
+    g_flash_LED = 0;
     while (1)
     {
         RGB_Timer();
