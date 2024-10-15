@@ -22,8 +22,11 @@ char *message_str1 = "Please Enter:";
 char *message_str2 = "                    ";
 int flag;
 int n;
+int cursor_pos = 0xC0;
+int inputEnable = 1;
 int main(void)
 {
+begin:
     SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
     GPIOPinTypeGPIOOutput(GPIO_PORTB_BASE, DB_PIN);
@@ -47,6 +50,7 @@ int main(void)
         LCD_command(1, 0, message_str1[n]); // WRITE DATA: display message_str1[n] on the LCD
         n++;
     }
+    LCD_command(0, 0, cursor_pos); // SET DD DRAM ADDRESS: set cursor to the first line
 
     while (1)
     {
@@ -54,19 +58,19 @@ int main(void)
         GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x1C); // first row
         if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4))
         {
-            LCD_command(0, 0, 0x8D); // display behind "Please Enter:"
+            LCD_command(0, 0, cursor_pos++); // display behind "Please Enter:"
             LCD_command(1, 0, '1');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_4);
         }
         else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5))
         {
-            LCD_command(0, 0, 0x8D);
+            LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '2');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
         }
         else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6))
         {
-            LCD_command(0, 0, 0x8D);
+            LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '3');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_6);
         }
@@ -74,19 +78,19 @@ int main(void)
         GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x1A); // second row
         if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4))
         {
-            LCD_command(0, 0, 0x8D);
+            LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '4');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_4);
         }
         else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5))
         {
-            LCD_command(0, 0, 0x8D);
+            LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '5');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
         }
         else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6))
         {
-            LCD_command(0, 0, 0x8D);
+            LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '6');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_6);
         }
@@ -94,41 +98,46 @@ int main(void)
         GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x16); // third row
         if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4))
         {
-            LCD_command(0, 0, 0x8D);
+            LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '7');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_4);
         }
         else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5))
         {
-            LCD_command(0, 0, 0x8D);
+            LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '8');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
         }
         else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6))
         {
-            LCD_command(0, 0, 0x8D);
+            LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '9');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_6);
         }
 
         GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x0E); // forth row
-        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4))
+        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4)) // *
         {
-            LCD_command(0, 0, 0x8D);
-            LCD_command(1, 0, '*');
+            LCD_command(0, 0, 0x01); // DISPLAY CLEAR: set display clear
+            lock_state = 0; // reset lockstate
+            cursor_pos = 0xC0;
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
+            goto begin;
         }
         else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5))
         {
-            LCD_command(0, 0, 0x8D);
+            LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '0');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
         }
         else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6))
         {
-            LCD_command(0, 0, 0x8D);
-            LCD_command(1, 0, '#');
+            LCD_command(0, 0, 0b01100); // DISPLAY ON/OFF: set display on, cursor on, & cursor blinking on
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_6);
+        }
+
+        if (cursor_pos > 0xCF) {
+            cursor_pos = 0xC0;
         }
     }
 }
