@@ -56,19 +56,19 @@ begin:
     {
 
         GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x1C); // first row
-        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4))
+        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4) && inputEnable)
         {
             LCD_command(0, 0, cursor_pos++); // display behind "Please Enter:"
             LCD_command(1, 0, '1');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_4);
         }
-        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5))
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5) && inputEnable)
         {
             LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '2');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
         }
-        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6))
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6) && inputEnable)
         {
             LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '3');
@@ -76,19 +76,19 @@ begin:
         }
 
         GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x1A); // second row
-        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4))
+        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4) && inputEnable)
         {
             LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '4');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_4);
         }
-        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5))
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5) && inputEnable)
         {
             LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '5');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
         }
-        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6))
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6) && inputEnable)
         {
             LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '6');
@@ -96,19 +96,19 @@ begin:
         }
 
         GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x16); // third row
-        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4))
+        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4) && inputEnable)
         {
             LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '7');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_4);
         }
-        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5))
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5) && inputEnable)
         {
             LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '8');
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
         }
-        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6))
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6) && inputEnable)
         {
             LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '9');
@@ -124,7 +124,7 @@ begin:
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
             goto begin;
         }
-        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5))
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5) && inputEnable)
         {
             LCD_command(0, 0, cursor_pos++);
             LCD_command(1, 0, '0');
