@@ -119,8 +119,8 @@ begin:
         if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4)) // *
         {
             LCD_command(0, 0, 0x01); // DISPLAY CLEAR: set display clear
-            lock_state = 0; // reset lockstate
             cursor_pos = 0xC0;
+            inputEnable = 1;
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
             goto begin;
         }
@@ -133,6 +133,7 @@ begin:
         else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6))
         {
             LCD_command(0, 0, 0b01100); // DISPLAY ON/OFF: set display on, cursor on, & cursor blinking on
+            inputEnable = 0;
             flushInput(GPIO_PORTC_BASE, GPIO_PIN_6);
         }
 
