@@ -43,22 +43,35 @@ int main(void) {
     SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
 
     // TODO: YOUR UART INITIALIZATION PROCEDURE
+
+
     // enable UART5 and GPIOE to communicate with BLUETOOTH
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART5);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
     // configure PE4 for RX, PE5 for TX
+    GPIOPinConfigure(GPIO_PE4_U5RX);
+    GPIOPinConfigure(GPIO_PE5_U5TX);
     // set PORTE pin4 and pin5 as type UART
+    GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
     // set UART5 base address, clock and baud rate
+    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
+    (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
 
     // enable LED of GPIOF for display
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
     GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
 
     // TODO: YOUR UART INTERRUPT INITIALIZATION PROCEDURE
+    UARTIntRegister(UART5_BASE, UART5IntHandler); // Register handler
+    UARTIntEnable(UART5_BASE, UART_INT_RX | UART_INT_RT); // Enable interrupt
+    IntEnable(INT_UART5); // Enable the processor to handle UART5 interrupts
+    IntMasterEnable(); // Enable global interrupts
     // set interrupt
 
     while (true)
     {
         if (led_on) {
-            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 14);
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
         }
         else {
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
@@ -67,11 +80,27 @@ int main(void) {
 }
 
 // TODO: YOUR UART INTERRUPT HANDLER
+
 // handler when Tiva receives data from UART5
 void UART5IntHandler(void)
 {
     // get interrupt status
-    // clear the interrupt signal
-    // receive data from UART5
+        uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
+        // clear the interrupt signal
+        UARTIntClear(UART5_BASE, ui32Status);
+        // receive data from UART5
+        char b;
+        while (UARTCharsAvail(UART5_BASE))
+        {
+            // forward the characters from UART5 to UART0
+            b = UARTCharGet(UART5_BASE);
+//            UARTCharPut(UART0_BASE, b);
+        }
     // set `led_on` according to the received data
+        if (b == 'X') {
+            led_on = true;
+        } else if (b == 'Y') {
+           led_on = false;
+       }
+
 }
