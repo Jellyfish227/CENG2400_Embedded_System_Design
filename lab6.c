@@ -36,7 +36,8 @@ void ADC0IntHandler(void) {
     //
     // TODO: Convert the voltage to Celsius and Fahrenheit
     //
-
+    ui32TempValueC = 147.5 - ((75 * ui32VolAvg * 3.3) / 4096);
+    ui32TempValueF = (ui32TempValueC * 1.8) + 32;
 }
 
 int main(void) {
@@ -56,7 +57,7 @@ int main(void) {
     // conversion. Each ADC module has 4 programmable sequences, sequence 0
     // to sequence 3. This example is arbitrarily using sequence 2.
     //
-    ADCSequenceConfigure(ADC0_BASE, 1, ADC_TRIGGER_PROCESSOR, 0);
+    ADCSequenceConfigure(ADC0_BASE, 1, ADC_TRIGGER_TIMER, 0);
 
     //
     // Configure step 0-3 on sequence 2. Sample the temperature sensor
@@ -80,6 +81,9 @@ int main(void) {
     //
     // TODO: Configure Timer to trigger the ADC
     //
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
+    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
+    TimerLoadSet(TIMER0_BASE, TIMER_A, SysCtlClockGet() / 10);
 
     //
     // Register the ADC interrupt handler and enable ADC interrupt
@@ -88,12 +92,8 @@ int main(void) {
     IntEnable(INT_ADC0SS1);
     ADCIntEnable(ADC0_BASE, 1);
 
+    TimerControlTrigger(TIMER0_BASE,TIMER_A,true);
+    TimerEnable(TIMER0_BASE, TIMER_A);
     while(1) {
-        //
-        // Trigger the ADC conversion.
-        // IMPORTANT: if you trigger the ADC conversion using Timer, there is no need to write this function.
-        ADCProcessorTrigger(ADC0_BASE, 1);
-        //
-        SysCtlDelay(SysCtlClockGet() / 10); // 0.1s delay
     }
 }
