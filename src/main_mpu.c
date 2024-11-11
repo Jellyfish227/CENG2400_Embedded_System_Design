@@ -2,7 +2,6 @@
 // polling-driven, collect motion data
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdbool.h>
 #include "sensorlib/i2cm_drv.h"
 #include "sensorlib/hw_mpu6050.h"
 #include "sensorlib/mpu6050.h"
@@ -18,6 +17,8 @@
 #include "driverlib/interrupt.h"
 #include "driverlib/i2c.h"
 #include "driverlib/sysctl.h"
+#include "driverlib/uart.h"
+#include "utils/uartstdio.h"
 
 volatile bool g_bMPU6050Done;
 tMPU6050 sMPU6050;
@@ -91,6 +92,29 @@ void Initialization(void)
     {
     }
 
+    // initialize UART5
+    // enable UART5 and GPIOE to communicate with BLUETOOTH
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART5);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+    // configure PE4 for RX, PE5 for TX
+    GPIOPinConfigure(GPIO_PE4_U5RX);
+    GPIOPinConfigure(GPIO_PE5_U5TX);
+    // set PORTE pin4 and pin5 as type UART
+    GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
+    // set UART5 base address, clock and baud rate
+    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
+                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+}
+
+void sendData(float yawAngle, float pitchAngle)
+{
+    // TODO: Send data to UART5
+    char data[22];
+    // format the data as a string
+    sprintf(data, "%.10f,%.10f", yawAngle, pitchAngle);
+    char* chp = data;
+    while (*chp) 
+        UARTCharPut(UART5_BASE, *chp++);
 }
 
 int main()

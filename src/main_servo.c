@@ -23,6 +23,7 @@
 #include "driverlib/interrupt.h"
 
 float servo_pwm_freq = 50;
+volatile float pitch_angle, yaw_angle, pitch_duty_cycle, yaw_duty_cycle;
 
 // determine the duty cycle according to the desired angle
 float angleToPWMDutyCycle(float angle)
@@ -33,6 +34,8 @@ float angleToPWMDutyCycle(float angle)
     // valid angle range: 0-180
     return (angle / 90 + 0.5) / (1000 / servo_pwm_freq);
 }
+
+void UART5IntHandler(void);
 
 int main()
 {
@@ -59,7 +62,26 @@ int main()
     GPIOPinConfigure(GPIO_PD0_M1PWM0);
     GPIOPinConfigure(GPIO_PD1_M1PWM1);
 
-    float pitch_angle, yaw_angle, pitch_duty_cycle, yaw_duty_cycle;
+    // enable UART5 and GPIOE to communicate with BLUETOOTH
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART5);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+    // configure PE4 for RX, PE5 for TX
+    GPIOPinConfigure(GPIO_PE4_U5RX);
+    GPIOPinConfigure(GPIO_PE5_U5TX);
+    // set PORTE pin4 and pin5 as type UART
+    GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
+    // set UART5 base address, clock and baud rate
+    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
+    (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+
+    // register interrupt handler for UART5
+    UARTIntRegister(UART5_BASE, UART5IntHandler);
+    // enable interrupt for UART5
+    UARTIntEnable(UART5_BASE, UART_INT_RX | UART_INT_RT);
+    // enable interrupt for UART5
+    IntEnable(INT_UART5);
+    // enable interrupt master control
+    IntMasterEnable();
 
     while (true)
     {
@@ -87,5 +109,19 @@ int main()
         pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
         PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
         SysCtlDelay(SysCtlClockGet() / 3);
+    }
+}
+
+void UART5IntHandler(void)
+{
+    // get interrupt status
+    uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
+    // clear the interrupt signal
+    UARTIntClear(UART5_BASE, ui32Status);
+    // TODO: Test received data, design data receiving logic
+    // receive data from UART5
+    while (UARTCharsAvail(UART5_BASE))
+    {
+        b = UARTCharGet(UART5_BASE);
     }
 }
