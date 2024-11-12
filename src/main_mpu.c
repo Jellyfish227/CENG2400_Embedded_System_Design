@@ -2,6 +2,7 @@
 // polling-driven, collect motion data
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include "sensorlib/i2cm_drv.h"
 #include "sensorlib/hw_mpu6050.h"
 #include "sensorlib/mpu6050.h"
@@ -28,6 +29,7 @@ tI2CMInstance g_sI2CMSimpleInst;
 uint32_t ui32LastTime;
 uint32_t ui32CurrentTime;
 float fDeltaTime;
+float fAngleYaw = 0.0f, fAngleTilt = 0.0f;
 //
 // The function that is provided by this example as a callback when MPU6050
 // transactions have completed.
@@ -129,9 +131,6 @@ int main()
     // Declare arrays to store accelerometer and gyroscope data
     float fAccel[3], fGyro[3];
 
-    // Initialize angular displacement variables
-    float fAngleX = 0.0f, fAngleY = 0.0f, fAngleZ = 0.0f;
-
     // Reset the MPU6050 sensor by writing to the power management register (PWR_MGMT_1)
     g_bMPU6050Done = false;
     MPU6050ReadModifyWrite(&sMPU6050, MPU6050_O_PWR_MGMT_1, 0x00, 0b00000010 & MPU6050_PWR_MGMT_1_DEVICE_RESET, MPU6050Callback, &sMPU6050);
@@ -150,9 +149,6 @@ int main()
     // Main infinite loop to repeatedly read data from the MPU6050
     while (1)
     {
-        float yawX, yawY, yawZ;
-        float pitchX, pitchY, pitchZ;
-
 
         //
         // Request another reading from the MPU6050 sensor
@@ -167,7 +163,7 @@ int main()
         MPU6050DataAccelGetFloat(&sMPU6050, &fAccel[0], &fAccel[1], &fAccel[2]);
 
         // Extract the gyroscope data (in floating-point format)
-        MPU6050DataGyroGetFloat(&sMPU6050, &fGyro[0], &fGyro[1], &fGyro[2]);
+        MPU6050DataGyroGetFloat(&sMPU6050, &fGyro[0], &fGyro[1], &fGyro[2]); // only 1 and 2 usable, 2 is yaw and 1 is tilt
 
         // Get the current time
         ui32CurrentTime = SysCtlClockGet();
@@ -177,12 +173,11 @@ int main()
 
 
         // Integrate gyroscope data to calculate angular displacement
-        fAngleX += fGyro[0] * fDeltaTime;
-        fAngleY += fGyro[1] * fDeltaTime;
-        fAngleZ += fGyro[2] * fDeltaTime;
+        fAngleYaw = 0.5 * fGyro[2] * fDeltaTime * fDeltaTime; // theta = wt + at^2
+        fAngleTilt = 0.5 * fGyro[1] * fDeltaTime * fDeltaTime;
 
         // Optionally, print or use the angular displacement values
-        printf("Angle X: %f, Angle Y: %f, Angle Z: %f\n", fAngleX, fAngleY, fAngleZ);
+        printf("Yaw: %f, Tilt: %f\n", fAngleYaw, fAngleTilt);
 
         // Update the last time
         ui32LastTime = ui32CurrentTime;
