@@ -30,6 +30,8 @@ float g_fRoll = 0.0f;                      // Roll angle
 float g_fDeltaTime = 0.01f;                // 10ms sample time
 float g_fComplementaryFilterCoeff = 0.96f; // Filter coefficient
 
+// todo: add reset button for angle reset
+
 //
 // The function that is provided by this example as a callback when MPU6050
 // transactions have completed.
@@ -194,20 +196,19 @@ int main()
         g_fRoll = g_fComplementaryFilterCoeff * (g_fRoll + fGyro[1] * g_fDeltaTime) +
                   (1.0f - g_fComplementaryFilterCoeff) * fAccRoll;
         // Yaw can only be calculated from gyro (no gravity reference)
-        g_fYaw += fGyro[2] * g_fDeltaTime;
+        g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime);
 
         // Normalize yaw to 0-180 degrees
-        g_fYaw = fmodf(g_fYaw, 360.0f);
         if (g_fYaw > 180.0f)
         {
-            g_fYaw = 360.0f - g_fYaw;
+            g_fYaw = 180.0f;
         }
         else if (g_fYaw < 0.0f)
         {
-            g_fYaw = -g_fYaw;
+            g_fYaw = 0.0f;
         }
 
-        //        // Send the computed angles to the servo controller
+        // Send the computed angles to the servo controller
         //        sendData(g_fYaw, g_fPitch);
 
         // Add a small delay to control the sample rate
