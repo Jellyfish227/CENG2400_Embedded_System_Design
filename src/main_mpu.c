@@ -1,5 +1,3 @@
-// master, read the data from the MPU6050 sensor, compute the angular displacement
-// polling-driven, collect motion data
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -20,16 +18,18 @@
 #include "driverlib/sysctl.h"
 #include "driverlib/uart.h"
 #include "utils/uartstdio.h"
+#include <math.h>
 
 volatile bool g_bMPU6050Done;
 tMPU6050 sMPU6050;
 tI2CMInstance g_sI2CMSimpleInst;
 
-// Time variables
-uint32_t ui32LastTime;
-uint32_t ui32CurrentTime;
-float fDeltaTime;
-float fAngleYaw = 0.0f, fAngleTilt = 0.0f;
+float g_fYaw = 0.0f;                       // Yaw angle
+float g_fPitch = 0.0f;                     // Pitch angle
+float g_fRoll = 0.0f;                      // Roll angle
+float g_fDeltaTime = 0.01f;                // 10ms sample time
+float g_fComplementaryFilterCoeff = 0.96f; // Filter coefficient
+
 //
 // The function that is provided by this example as a callback when MPU6050
 // transactions have completed.
@@ -58,13 +58,13 @@ void I2CMSimpleIntHandler(void)
 
 void Initialization(void)
 {
-    //enable I2C module 0
+    // enable I2C module 0
     SysCtlPeripheralEnable(SYSCTL_PERIPH_I2C0);
 
-    //reset module
+    // reset module
     SysCtlPeripheralReset(SYSCTL_PERIPH_I2C0);
 
-    //enable GPIO peripheral that contains I2C 0
+    // enable GPIO peripheral that contains I2C 0
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
 
     // Configure the pin muxing for I2C0 functions on port B2 and B3.
@@ -79,7 +79,7 @@ void Initialization(void)
     // Use the system clock for the I2C0 module.
     I2CMasterInitExpClk(I2C0_BASE, SysCtlClockGet(), true);
 
-    //clear I2C FIFOs
+    // clear I2C FIFOs
     HWREG(I2C0_BASE + I2C_O_FIFOCTL) = 80008000;
 
     // Initialize the I2C master driver.
@@ -93,30 +93,49 @@ void Initialization(void)
     while (!g_bMPU6050Done)
     {
     }
+}
 
-    // initialize UART5
-    // enable UART5 and GPIOE to communicate with BLUETOOTH
+void computeAnglesFromAccel(float fAccel[3], float *pfPitch, float *pfRoll)
+{
+    // Convert accelerometer values to angles
+    *pfRoll = atan2f(fAccel[1], fAccel[2]) * 180.0f / M_PI;
+    *pfPitch = atan2f(-fAccel[0], sqrtf(fAccel[1] * fAccel[1] + fAccel[2] * fAccel[2])) * 180.0f / M_PI;
+}
+
+void InitUART(void)
+{
+    // Enable UART5 and PORTE peripherals
     SysCtlPeripheralEnable(SYSCTL_PERIPH_UART5);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
-    // configure PE4 for RX, PE5 for TX
+
+    // Configure GPIO Pins for UART5
     GPIOPinConfigure(GPIO_PE4_U5RX);
     GPIOPinConfigure(GPIO_PE5_U5TX);
-    // set PORTE pin4 and pin5 as type UART
     GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
-    // set UART5 base address, clock and baud rate
-    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
-                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+
+    // Configure UART5 for 115200 baud, 8N1 operation
+    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 115200,
+                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
+                         UART_CONFIG_PAR_NONE));
 }
 
 void sendData(float yawAngle, float pitchAngle)
 {
-    // TODO: Send data to UART5
-    char data[22];
-    // format the data as a string
+    char data[22]; // Buffer for formatted string
+
+    // Format the angles as a string with 10 decimal places
+    // Format: "yaw,pitch" (e.g., "123.4567,89.1234")
     sprintf(data, "%.10f,%.10f", yawAngle, pitchAngle);
-    char* chp = data;
-    while (*chp) 
+
+    // Send each character of the string through UART
+    char *chp = data;
+    while (*chp)
+    {
         UARTCharPut(UART5_BASE, *chp++);
+    }
+
+    // Send newline character to mark end of transmission
+    UARTCharPut(UART5_BASE, '\n');
 }
 
 int main()
@@ -124,6 +143,9 @@ int main()
     // Set the system clock to use the PLL with a 16 MHz crystal oscillator.
     // The clock is divided by 1 (SYSCTL_SYSDIV_1) and uses an internal oscillator (SYSCTL_OSC_INT).
     SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_PLL | SYSCTL_OSC_INT | SYSCTL_XTAL_16MHZ);
+
+    // Initialize UART before using it
+    InitUART();
 
     // Initialize the system (e.g., peripherals, hardware components)
     Initialization();
@@ -145,11 +167,9 @@ int main()
     {
     }
 
-    ui32LastTime = SysCtlClockGet();
     // Main infinite loop to repeatedly read data from the MPU6050
     while (1)
     {
-
         //
         // Request another reading from the MPU6050 sensor
         //
@@ -159,27 +179,38 @@ int main()
         {
         }
 
-        // Extract the accelerometer data (in floating-point format)
+        // Get accelerometer and gyroscope data
         MPU6050DataAccelGetFloat(&sMPU6050, &fAccel[0], &fAccel[1], &fAccel[2]);
+        MPU6050DataGyroGetFloat(&sMPU6050, &fGyro[0], &fGyro[1], &fGyro[2]);
 
-        // Extract the gyroscope data (in floating-point format)
-        MPU6050DataGyroGetFloat(&sMPU6050, &fGyro[0], &fGyro[1], &fGyro[2]); // only 1 and 2 usable, 2 is yaw and 1 is tilt
+        // Calculate angles from accelerometer
+        float fAccPitch, fAccRoll;
+        computeAnglesFromAccel(fAccel, &fAccPitch, &fAccRoll);
 
-        // Get the current time
-        ui32CurrentTime = SysCtlClockGet();
+        // Complementary filter to combine gyro and accelerometer data
+        // Gyro data is integrated to get angle change
+        g_fPitch = g_fComplementaryFilterCoeff * (g_fPitch + fGyro[0] * g_fDeltaTime) +
+                   (1.0f - g_fComplementaryFilterCoeff) * fAccPitch;
+        g_fRoll = g_fComplementaryFilterCoeff * (g_fRoll + fGyro[1] * g_fDeltaTime) +
+                  (1.0f - g_fComplementaryFilterCoeff) * fAccRoll;
+        // Yaw can only be calculated from gyro (no gravity reference)
+        g_fYaw += fGyro[2] * g_fDeltaTime;
 
-        // Calculate the time difference in seconds
-        fDeltaTime = (ui32CurrentTime - ui32LastTime) / (float)SysCtlClockGet();
+        // Normalize yaw to 0-180 degrees
+        g_fYaw = fmodf(g_fYaw, 360.0f);
+        if (g_fYaw > 180.0f)
+        {
+            g_fYaw = 360.0f - g_fYaw;
+        }
+        else if (g_fYaw < 0.0f)
+        {
+            g_fYaw = -g_fYaw;
+        }
 
+        //        // Send the computed angles to the servo controller
+        //        sendData(g_fYaw, g_fPitch);
 
-        // Integrate gyroscope data to calculate angular displacement
-        fAngleYaw = 0.5 * fGyro[2] * fDeltaTime * fDeltaTime; // theta = wt + at^2
-        fAngleTilt = 0.5 * fGyro[1] * fDeltaTime * fDeltaTime;
-
-        // Optionally, print or use the angular displacement values
-        printf("Yaw: %f, Tilt: %f\n", fAngleYaw, fAngleTilt);
-
-        // Update the last time
-        ui32LastTime = ui32CurrentTime;
+        // Add a small delay to control the sample rate
+        SysCtlDelay(SysCtlClockGet() / (3 * 100)); // Approximately 10ms delay
     }
 }
