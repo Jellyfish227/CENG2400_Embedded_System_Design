@@ -189,6 +189,7 @@ void UART5IntHandler(void)
     while (UARTCharsAvail(UART5_BASE))
     {
         char b = UARTCharGet(UART5_BASE);
+        UARTCharPut(UART0_BASE, b);
         if (charCount < 3) {
             charYaw[charCount] = b;
         } else if (charCount < 6) {

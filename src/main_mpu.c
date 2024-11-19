@@ -116,7 +116,7 @@ void InitUART(void)
     GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
 
     // Configure UART5 for 115200 baud, 8N1 operation
-    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 115200,
+    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
                         (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
                          UART_CONFIG_PAR_NONE));
 }
@@ -138,6 +138,16 @@ void sendData(float yawAngle, float pitchAngle)
 
     // Send newline character to mark end of transmission
     UARTCharPut(UART5_BASE, '\n');
+}
+
+#define DEADZONE_THRESHOLD 0.5f  // Adjust this value based on your needs
+
+float applyDeadZone(float value, float threshold) 
+{
+    if (fabs(value) < threshold) {
+        return 0.0f;
+    }
+    return value;
 }
 
 int main()
@@ -208,8 +218,13 @@ int main()
             g_fYaw = 0.0f;
         }
 
+        // Apply dead zone
+        fGyro[0] = applyDeadZone(fGyro[0], DEADZONE_THRESHOLD);
+        fGyro[1] = applyDeadZone(fGyro[1], DEADZONE_THRESHOLD);
+        fGyro[2] = applyDeadZone(fGyro[2], DEADZONE_THRESHOLD);
+
         // Send the computed angles to the servo controller
-        //        sendData(g_fYaw, g_fPitch);
+        sendData(g_fYaw, g_fPitch);
 
         // Add a small delay to control the sample rate
         SysCtlDelay(SysCtlClockGet() / (3 * 100)); // Approximately 10ms delay
