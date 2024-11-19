@@ -150,6 +150,27 @@ float applyDeadZone(float value, float threshold)
     return value;
 }
 
+// Add these constants for gyro scaling
+#define GYRO_SENSITIVITY 131.0f    // For ±250 deg/s range
+#define RAD_TO_DEG      57.2957795f
+
+// Add this function to calculate yaw from gyro data directly
+float calculateYawFromGyro(float gyroZ) 
+{
+    // Convert raw gyro data to degrees/second
+    float degPerSec = gyroZ / GYRO_SENSITIVITY;
+    
+    // Calculate absolute angle (0-180)
+    float absAngle = fabs(degPerSec) * g_fDeltaTime * RAD_TO_DEG;
+    
+    // Limit to 0-180 range
+    if (absAngle > 180.0f) {
+        absAngle = 180.0f;
+    }
+    
+    return absAngle;
+}
+
 int main()
 {
     // Set the system clock to use the PLL with a 16 MHz crystal oscillator.
@@ -195,36 +216,51 @@ int main()
         MPU6050DataAccelGetFloat(&sMPU6050, &fAccel[0], &fAccel[1], &fAccel[2]);
         MPU6050DataGyroGetFloat(&sMPU6050, &fGyro[0], &fGyro[1], &fGyro[2]);
 
-        // Calculate angles from accelerometer
-        float fAccPitch, fAccRoll;
-        computeAnglesFromAccel(fAccel, &fAccPitch, &fAccRoll);
-
-        // Complementary filter to combine gyro and accelerometer data
-        // Gyro data is integrated to get angle change
-        g_fPitch = g_fComplementaryFilterCoeff * (g_fPitch + fGyro[0] * g_fDeltaTime) +
-                   (1.0f - g_fComplementaryFilterCoeff) * fAccPitch;
-        g_fRoll = g_fComplementaryFilterCoeff * (g_fRoll + fGyro[1] * g_fDeltaTime) +
-                  (1.0f - g_fComplementaryFilterCoeff) * fAccRoll;
-        // Yaw can only be calculated from gyro (no gravity reference)
-        g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime);
-
-        // Normalize yaw to 0-180 degrees
-        if (g_fYaw > 180.0f)
-        {
-            g_fYaw = 180.0f;
-        }
-        else if (g_fYaw < 0.0f)
-        {
-            g_fYaw = 0.0f;
-        }
-
-        // Apply dead zone
+        // Apply dead zone first
         fGyro[0] = applyDeadZone(fGyro[0], DEADZONE_THRESHOLD);
         fGyro[1] = applyDeadZone(fGyro[1], DEADZONE_THRESHOLD);
         fGyro[2] = applyDeadZone(fGyro[2], DEADZONE_THRESHOLD);
 
-        // Send the computed angles to the servo controller
-        sendData(g_fYaw, g_fPitch);
+        // Calculate angles from accelerometer
+        float fAccPitch, fAccRoll;
+        computeAnglesFromAccel(fAccel, &fAccPitch, &fAccRoll);
+
+        // Calculate pitch and roll using complementary filter
+        g_fPitch = g_fComplementaryFilterCoeff * (fGyro[0] / GYRO_SENSITIVITY) * g_fDeltaTime * RAD_TO_DEG +
+                   (1.0f - g_fComplementaryFilterCoeff) * fAccPitch;
+        g_fRoll = g_fComplementaryFilterCoeff * (fGyro[1] / GYRO_SENSITIVITY) * g_fDeltaTime * RAD_TO_DEG +
+                  (1.0f - g_fComplementaryFilterCoeff) * fAccRoll;
+
+        // Calculate yaw directly from gyro data
+        g_fYaw = calculateYawFromGyro(fGyro[2]);
+
+        // Add simple moving average filter for smoothing
+        #define FILTER_SIZE 5
+        static float yawHistory[FILTER_SIZE] = {0};
+        static float pitchHistory[FILTER_SIZE] = {0};
+        static int filterIndex = 0;
+
+        // Update history
+        yawHistory[filterIndex] = g_fYaw;
+        pitchHistory[filterIndex] = g_fPitch;
+        filterIndex = (filterIndex + 1) % FILTER_SIZE;
+
+        // Calculate averages
+        float smoothYaw = 0;
+        float smoothPitch = 0;
+        for(int i = 0; i < FILTER_SIZE; i++) {
+            smoothYaw += yawHistory[i];
+            smoothPitch += pitchHistory[i];
+        }
+        smoothYaw /= FILTER_SIZE;
+        smoothPitch /= FILTER_SIZE;
+
+        // Ensure angles stay within bounds
+        smoothYaw = fminf(fmaxf(smoothYaw, 0.0f), 180.0f);
+        smoothPitch = fminf(fmaxf(smoothPitch, -90.0f), 90.0f);
+
+        // Send the smoothed angles
+        sendData(smoothYaw, smoothPitch);
 
         // Add a small delay to control the sample rate
         SysCtlDelay(SysCtlClockGet() / (3 * 100)); // Approximately 10ms delay
