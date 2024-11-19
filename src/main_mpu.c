@@ -28,7 +28,7 @@ float g_fYaw = 0.0f;                       // Yaw angle
 float g_fPitch = 0.0f;                     // Pitch angle
 float g_fRoll = 0.0f;                      // Roll angle
 float g_fDeltaTime = 0.01f;                // 10ms sample time
-float g_fComplementaryFilterCoeff = 0.96f; // Filter coefficient
+float g_fComplementaryFilterCoeff = 0.5f; // Filter coefficient
 
 // todo: add reset button for angle reset
 
@@ -127,7 +127,7 @@ void sendData(float yawAngle, float pitchAngle)
 
     // Format the angles as a string with 10 decimal places
     // Format: "yaw,pitch" (e.g., "123.4567,89.1234")
-    sprintf(data, "%03d%03d", (int)yawAngle, (int)pitchAngle);
+    sprintf(data, "%03d%03d\0", (int)yawAngle, (int)pitchAngle);
 
     // Send each character of the string through UART
     char *chp = data;
@@ -193,11 +193,11 @@ int main()
         // Complementary filter to combine gyro and accelerometer data
         // Gyro data is integrated to get angle change
         g_fPitch = g_fComplementaryFilterCoeff * (g_fPitch + fGyro[0] * g_fDeltaTime) +
-                   (1.0f - g_fComplementaryFilterCoeff) * fAccPitch;
+                   (1.0f - g_fComplementaryFilterCoeff) * fAccPitch + 30;
         g_fRoll = g_fComplementaryFilterCoeff * (g_fRoll + fGyro[1] * g_fDeltaTime) +
                   (1.0f - g_fComplementaryFilterCoeff) * fAccRoll;
         // Yaw can only be calculated from gyro (no gravity reference)
-        g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime);
+        g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime) /2 ;
 
         // Normalize yaw to 0-180 degrees
         if (g_fYaw > 180.0f)
