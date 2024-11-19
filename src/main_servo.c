@@ -131,10 +131,11 @@ void InitUART(void)
 
 void sendData(float yawAngle, float pitchAngle)
 {
-    char data[10]; // Increased buffer size for safety
+    char data[12]; // Increased buffer size for safety
     
-    // Use more precise formatting
-    snprintf(data, sizeof(data), "%03.0f%03.0f", yawAngle, pitchAngle);
+    // Use snprintf to format the data with 3 decimal places
+    snprintf(data, sizeof(data), "%03.0f%03.0f", 
+             roundf(yawAngle), roundf(pitchAngle));
     
     // Add error checking for UART transmission
     while(UARTBusy(UART5_BASE)) {}  // Wait if UART is busy
