@@ -8,7 +8,6 @@
 // slave, receive angular displacement, interrupt-driven
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include "inc/hw_memmap.h"
 #include "inc/hw_types.h"
 #include "inc/hw_gpio.h"
