@@ -20,6 +20,10 @@
 #include "utils/uartstdio.h"
 #include <math.h>
 
+#define FILTER_WINDOW_SIZE 10
+#define GYRO_DEADZONE 0.1f
+#define ACCEL_DEADZONE 0.1f
+
 volatile bool g_bMPU6050Done;
 tMPU6050 sMPU6050;
 tI2CMInstance g_sI2CMSimpleInst;
@@ -29,6 +33,10 @@ float g_fPitch = 0.0f;                     // Pitch angle
 float g_fRoll = 0.0f;                      // Roll angle
 float g_fDeltaTime = 0.01f;                // 10ms sample time
 float g_fComplementaryFilterCoeff = 0.5f; // Filter coefficient
+
+float g_yawHistory[FILTER_WINDOW_SIZE] = {0};
+float g_pitchHistory[FILTER_WINDOW_SIZE] = {0};
+int g_filterIndex = 0;
 
 // todo: add reset button for angle reset
 
@@ -140,6 +148,27 @@ void sendData(float yawAngle, float pitchAngle)
     UARTCharPut(UART5_BASE, '\n');
 }
 
+float applyDeadZone(float value, float threshold) 
+{
+    if (fabs(value) < threshold) {
+        return 0.0f;
+    }
+    return value;
+}
+
+float movingAverage(float newValue, float* history) 
+{
+    // Add new value to history
+    history[g_filterIndex] = newValue;
+    
+    // Calculate average
+    float sum = 0;
+    for(int i = 0; i < FILTER_WINDOW_SIZE; i++) {
+        sum += history[i];
+    }
+    
+    return sum / FILTER_WINDOW_SIZE;
+}
 
 int main()
 {
@@ -186,18 +215,33 @@ int main()
         MPU6050DataAccelGetFloat(&sMPU6050, &fAccel[0], &fAccel[1], &fAccel[2]);
         MPU6050DataGyroGetFloat(&sMPU6050, &fGyro[0], &fGyro[1], &fGyro[2]);
 
+        // Apply dead zone to reduce noise
+        for(int i = 0; i < 3; i++) {
+            fGyro[i] = applyDeadZone(fGyro[i], GYRO_DEADZONE);
+            fAccel[i] = applyDeadZone(fAccel[i], ACCEL_DEADZONE);
+        }
+
         // Calculate angles from accelerometer
         float fAccPitch, fAccRoll;
         computeAnglesFromAccel(fAccel, &fAccPitch, &fAccRoll);
 
-        // Complementary filter to combine gyro and accelerometer data
-        // Gyro data is integrated to get angle change
+        // Complementary filter with reduced gyro influence when stationary
         g_fPitch = g_fComplementaryFilterCoeff * (g_fPitch + fGyro[0] * g_fDeltaTime) +
                    (1.0f - g_fComplementaryFilterCoeff) * fAccPitch + 30;
         g_fRoll = g_fComplementaryFilterCoeff * (g_fRoll + fGyro[1] * g_fDeltaTime) +
                   (1.0f - g_fComplementaryFilterCoeff) * fAccRoll;
-        // Yaw can only be calculated from gyro (no gravity reference)
-        g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime) /2 ;
+        
+        // Calculate yaw with reduced sensitivity
+        if (fabs(fGyro[2]) > GYRO_DEADZONE) {
+            g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime) / 4.0f;  // Reduced sensitivity
+        }
+
+        // Apply moving average filter
+        g_fYaw = movingAverage(g_fYaw, g_yawHistory);
+        g_fPitch = movingAverage(g_fPitch, g_pitchHistory);
+
+        // Update filter index
+        g_filterIndex = (g_filterIndex + 1) % FILTER_WINDOW_SIZE;
 
         // Normalize yaw to 0-180 degrees
         if (g_fYaw > 180.0f)
@@ -222,7 +266,7 @@ int main()
         // Send the computed angles to the servo controller
         sendData(g_fYaw, g_fPitch);
 
-        // Add a small delay to control the sample rate
-        SysCtlDelay(SysCtlClockGet() / (3 * 100)); // Approximately 10ms delay
+        // Increase delay slightly to reduce sampling rate
+        SysCtlDelay(SysCtlClockGet() / (3 * 50)); // Approximately 20ms delay
     }
 }
