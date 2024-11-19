@@ -123,11 +123,11 @@ void InitUART(void)
 
 void sendData(float yawAngle, float pitchAngle)
 {
-    char data[22]; // Buffer for formatted string
+    char data[7]; // Buffer for formatted string
 
     // Format the angles as a string with 10 decimal places
     // Format: "yaw,pitch" (e.g., "123.4567,89.1234")
-    sprintf(data, "%.10f,%.10f", yawAngle, pitchAngle);
+    sprintf(data, "%03d%03d\0", (int)yawAngle, (int)pitchAngle);
 
     // Send each character of the string through UART
     char *chp = data;
