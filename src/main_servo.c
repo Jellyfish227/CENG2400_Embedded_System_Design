@@ -1,52 +1,39 @@
+// hardware connection:
+// servo red wire -> V Bus
+// servo brown wire -> GND
+// servo (pitch) orange wire -> PD0
+// servo (yaw) orange wire -> PD1
+// pitch: up-down, yaw: left-right
+
+// slave, receive angular displacement, interrupt-driven
+#include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include "inc/hw_memmap.h"
-#include "inc/hw_sysctl.h"
-#include "inc/hw_types.h"
-#include "inc/hw_i2c.h"
 #include "inc/hw_types.h"
 #include "inc/hw_gpio.h"
-#include "driverlib/gpio.h"
-#include "driverlib/pin_map.h"
-#include "driverlib/interrupt.h"
-#include "driverlib/i2c.h"
+#include "inc/hw_ints.h"
 #include "driverlib/sysctl.h"
+#include "driverlib/gpio.h"
+#include "driverlib/debug.h"
+#include "driverlib/pwm.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/rom.h"
 #include "driverlib/uart.h"
 #include "utils/uartstdio.h"
-#include <math.h>
+#include "driverlib/interrupt.h"
 
-#define FILTER_WINDOW_SIZE 10
-#define GYRO_DEADZONE 0.2f
-#define ACCEL_DEADZONE 0.15f
+float servo_pwm_freq = 50;
+volatile float pitch_angle, yaw_angle, pitch_duty_cycle, yaw_duty_cycle;
 
-volatile bool g_bMPU6050Done;
-tMPU6050 sMPU6050;
-tI2CMInstance g_sI2CMSimpleInst;
-
-float g_fYaw = 0.0f;                       // Yaw angle
-float g_fPitch = 0.0f;                     // Pitch angle
-float g_fRoll = 0.0f;                      // Roll angle
-float g_fDeltaTime = 0.01f;                // 10ms sample time
-float g_fComplementaryFilterCoeff = 0.96f; // Filter coefficient
-
-float g_yawHistory[FILTER_WINDOW_SIZE] = {0};
-float g_pitchHistory[FILTER_WINDOW_SIZE] = {0};
-int g_yawFilterIndex = 0;
-int g_pitchFilterIndex = 0;
-
-// todo: add reset button for angle reset
-
-//
-// The function that is provided by this example as a callback when MPU6050
-// transactions have completed.
-//
-void MPU6050Callback(void *pvCallbackData, uint_fast8_t ui8Status)
+// determine the duty cycle according to the desired angle
+float angleToPWMDutyCycle(float angle)
 {
-    if (ui8Status != I2CM_STATUS_SUCCESS)
-    {
-        g_bMPU6050Done = false;
-        return;
-    }
-    g_bMPU6050Done = true;
+    // angle (duty cycle): 0 (0.5ms/20ms), 90 (1.5ms/20ms), 180 (2.5ms/20ms)
+    // angle to pulse width: pulse_width = angle / 90 + 0.5
+    // pulse width to duty cycle: duty_cycle = pulse_width / period
+    // valid angle range: 0-180
+    return (angle / 90 + 0.5) / (1000 / servo_pwm_freq);
 }
 
 void UART5IntHandler(void);
@@ -55,69 +42,44 @@ void UART0IntHandler(void);
 char charYaw[3], charPitch[3];
 int degreeArr[2];
 int prevAngle[2];
-prevAngle[0] = 0;
-prevAngle[1] = 0;
+int isFinished = 0;
 
 int main()
 {
-    // enable I2C module 0
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_I2C0);
+    // set the system clock and the PWM clock
+    // system clock frequency : PWM clock frequency = 64 : 1
+    SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
+    SysCtlPWMClockSet(SYSCTL_PWMDIV_64);
+    // enable module PWM1
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM1);
+    SysCtlDelay(SysCtlClockGet() / 30); // avoid program overheat & logic issues
+    // configure generator 0 of PWM1
+    PWMGenEnable(PWM1_BASE, PWM_GEN_0);
+    PWMGenConfigure(PWM1_BASE, PWM_GEN_0, PWM_GEN_MODE_DOWN);
+    // calculate the number of PWM instruction cycles in each PWM period
+    uint32_t pwm_period = (SysCtlClockGet() / 64 / servo_pwm_freq);
+    PWMGenPeriodSet(PWM1_BASE, PWM_GEN_0, pwm_period);
+    // enable the 0th and 1st outputs of PWM1
+    PWMOutputState(PWM1_BASE, PWM_OUT_0_BIT, true);
+    PWMOutputState(PWM1_BASE, PWM_OUT_1_BIT, true);
+    // PD0 and PD1 to send the signals to the servos
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+    GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_0);
+    GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_1);
+    GPIOPinConfigure(GPIO_PD0_M1PWM0);
+    GPIOPinConfigure(GPIO_PD1_M1PWM1);
 
-    // reset module
-    SysCtlPeripheralReset(SYSCTL_PERIPH_I2C0);
-
-    // enable GPIO peripheral that contains I2C 0
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
-
-    // Configure the pin muxing for I2C0 functions on port B2 and B3.
-    GPIOPinConfigure(GPIO_PB2_I2C0SCL);
-    GPIOPinConfigure(GPIO_PB3_I2C0SDA);
-
-    // Select the I2C function for these pins.
-    GPIOPinTypeI2CSCL(GPIO_PORTB_BASE, GPIO_PIN_2);
-    GPIOPinTypeI2C(GPIO_PORTB_BASE, GPIO_PIN_3);
-
-    // Enable and initialize the I2C0 master module.
-    // Use the system clock for the I2C0 module.
-    I2CMasterInitExpClk(I2C0_BASE, SysCtlClockGet(), true);
-
-    // clear I2C FIFOs
-    HWREG(I2C0_BASE + I2C_O_FIFOCTL) = 80008000;
-
-    // Initialize the I2C master driver.
-    I2CMInit(&g_sI2CMSimpleInst, I2C0_BASE, INT_I2C0, 0xff, 0xff, SysCtlClockGet());
-    // Register the interrupt handler for I2C interrupts
-    I2CIntRegister(I2C0_BASE, I2CMSimpleIntHandler);
-
-    // Configure the MPU6050
-    g_bMPU6050Done = false;
-    MPU6050Init(&sMPU6050, &g_sI2CMSimpleInst, 0x68, MPU6050Callback, &sMPU6050);
-    while (!g_bMPU6050Done)
-    {
-    }
-}
-
-void computeAnglesFromAccel(float fAccel[3], float *pfPitch, float *pfRoll)
-{
-    // Convert accelerometer values to angles
-    *pfRoll = atan2f(fAccel[1], fAccel[2]) * 180.0f / M_PI;
-    *pfPitch = atan2f(-fAccel[0], sqrtf(fAccel[1] * fAccel[1] + fAccel[2] * fAccel[2])) * 180.0f / M_PI;
-}
-
-void InitUART(void)
-{
-    // Enable UART5 and PORTE peripherals
+    // enable UART5 and GPIOE to communicate with BLUETOOTH
     SysCtlPeripheralEnable(SYSCTL_PERIPH_UART5);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
-
-    // Configure GPIO Pins for UART5
+    // configure PE4 for RX, PE5 for TX
     GPIOPinConfigure(GPIO_PE4_U5RX);
     GPIOPinConfigure(GPIO_PE5_U5TX);
+    // set PORTE pin4 and pin5 as type UART
     GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
-
-    // Configure UART5 for 115200 baud, 8N1 operation
+    // set UART5 base address, clock and baud rate
     UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
-    (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
 
     // register interrupt handler for UART5
     UARTIntRegister(UART5_BASE, UART5IntHandler);
@@ -163,6 +125,9 @@ void InitUART(void)
     UARTCharPut(UART0_BASE, '!');
     UARTCharPut(UART0_BASE, '\n');
 
+    prevAngle[0] = 0;
+    prevAngle[1] = 0;
+
     while (true)
     {
         // yaw_angle = 0;
@@ -189,15 +154,16 @@ void InitUART(void)
         // pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
         // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
         // SysCtlDelay(SysCtlClockGet() / 3);
-        degreeArr[0] = atoi(charYaw);
-        degreeArr[1] = atoi(charPitch);
-        if (degreeArr[0] != prevAngle[0] || degreeArr[1] != prevAngle[1]) {
+        if (isFinished)
+        {
+            degreeArr[0] = atoi(charYaw);
+            degreeArr[1] = atoi(charPitch);
             yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
             pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
-            prevAngle[0] = degreeArr[0];
-            prevAngle[1] = degreeArr[1];
+            //            prevAngle[0] = degreeArr[0];
+            //            prevAngle[1] = degreeArr[1];
         }
     }
 }
@@ -224,6 +190,7 @@ void UART5IntHandler(void)
     uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
     // clear the interrupt signal
     UARTIntClear(UART5_BASE, ui32Status);
+    isFinished = 0;
 
     uint32_t charCount = 0;
     // TODO: Test received data, design data receiving logic
@@ -231,11 +198,16 @@ void UART5IntHandler(void)
     while (UARTCharsAvail(UART5_BASE))
     {
         char b = UARTCharGet(UART5_BASE);
-        if (charCount < 3) {
+        UARTCharPut(UART0_BASE, b);
+        if (charCount < 3)
+        {
             charYaw[charCount] = b;
-        } else if (charCount < 6) {
+        }
+        else if (charCount > 3 && charCount < 6)
+        {
             charPitch[charCount - 3] = b;
         }
         charCount++;
     }
+    isFinished = 1;
 }
