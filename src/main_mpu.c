@@ -116,7 +116,7 @@ void InitUART(void)
     GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
 
     // Configure UART5 for 115200 baud, 8N1 operation
-    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 115200,
+    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
                         (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
                          UART_CONFIG_PAR_NONE));
 }
@@ -127,7 +127,7 @@ void sendData(float yawAngle, float pitchAngle)
 
     // Format the angles as a string with 10 decimal places
     // Format: "yaw,pitch" (e.g., "123.4567,89.1234")
-    sprintf(data, "%03d%03d\0", (int)yawAngle, (int)pitchAngle);
+    sprintf(data, "%03d%03d", (int)yawAngle, (int)pitchAngle);
 
     // Send each character of the string through UART
     char *chp = data;
@@ -209,8 +209,18 @@ int main()
             g_fYaw = 0.0f;
         }
 
+        // Normalize pitch to 30-90 degrees
+        if (g_fPitch > 90.0f)
+        {
+            g_fPitch = 90.0f;
+        }
+        else if (g_fPitch < 30.0f)
+        {
+            g_fPitch = 30.0f;
+        }
+
         // Send the computed angles to the servo controller
-        //        sendData(g_fYaw, g_fPitch);
+        sendData(g_fYaw, g_fPitch);
 
         // Add a small delay to control the sample rate
         SysCtlDelay(SysCtlClockGet() / (3 * 100)); // Approximately 10ms delay
