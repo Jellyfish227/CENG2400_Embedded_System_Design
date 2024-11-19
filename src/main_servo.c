@@ -36,6 +36,10 @@ float angleToPWMDutyCycle(float angle)
 }
 
 void UART5IntHandler(void);
+void UART0IntHandler(void);
+
+char charYaw[3], charPitch[3];
+int degreeArr[2];
 
 int main()
 {
@@ -80,35 +84,94 @@ int main()
     UARTIntEnable(UART5_BASE, UART_INT_RX | UART_INT_RT);
     // enable interrupt for UART5
     IntEnable(INT_UART5);
+
+    // enable UART0 and GPIOA to communicate with PC
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    // configure PA0 for RX, PA1 for TX
+    GPIOPinConfigure(GPIO_PA0_U0RX);
+    GPIOPinConfigure(GPIO_PA1_U0TX);
+    // set PA0 and PA1 as type UART
+    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    // set UART0 base address, clock and baud rate
+    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
+                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+    IntEnable(INT_UART0);
+    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
+    UARTIntRegister(UART0_BASE, UART0IntHandler);
     // enable interrupt master control
     IntMasterEnable();
 
+    // UART0 connection indicator
+    // UART0 connected if the serial monitor displays `UART0 connected!`
+    UARTCharPut(UART0_BASE, 'U');
+    UARTCharPut(UART0_BASE, 'A');
+    UARTCharPut(UART0_BASE, 'R');
+    UARTCharPut(UART0_BASE, 'T');
+    UARTCharPut(UART0_BASE, '0');
+    UARTCharPut(UART0_BASE, ' ');
+    UARTCharPut(UART0_BASE, 'C');
+    UARTCharPut(UART0_BASE, 'o');
+    UARTCharPut(UART0_BASE, 'n');
+    UARTCharPut(UART0_BASE, 'n');
+    UARTCharPut(UART0_BASE, 'e');
+    UARTCharPut(UART0_BASE, 'c');
+    UARTCharPut(UART0_BASE, 't');
+    UARTCharPut(UART0_BASE, 'e');
+    UARTCharPut(UART0_BASE, 'd');
+    UARTCharPut(UART0_BASE, '!');
+    UARTCharPut(UART0_BASE, '\n');
+
     while (true)
     {
-        yaw_angle = 0;
-        yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        // yaw_angle = 0;
+        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        // yaw_angle = 90;
+        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        // yaw_angle = 180;
+        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        // yaw_angle = 90;
+        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        // pitch_angle = 60;
+        // pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        // pitch_angle = 90;
+        // pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        degreeArr[0] = atoi(charYaw);
+        degreeArr[1] = atoi(charPitch);
+        yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
         PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
         SysCtlDelay(SysCtlClockGet() / 3);
-        yaw_angle = 90;
-        yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-        SysCtlDelay(SysCtlClockGet() / 3);
-        yaw_angle = 180;
-        yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-        SysCtlDelay(SysCtlClockGet() / 3);
-        yaw_angle = 90;
-        yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-        SysCtlDelay(SysCtlClockGet() / 3);
-        pitch_angle = 60;
-        pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
+        pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
         PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
         SysCtlDelay(SysCtlClockGet() / 3);
-        pitch_angle = 90;
-        pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
-        SysCtlDelay(SysCtlClockGet() / 3);
+    }
+}
+
+// handler when Tiva receives data from UART0
+void UART0IntHandler(void)
+{
+    // get interrupt status
+    uint32_t ui32Status = UARTIntStatus(UART0_BASE, true);
+    // clear the interrupt signal
+    UARTIntClear(UART0_BASE, ui32Status);
+    // receive data from UART0
+    while (UARTCharsAvail(UART0_BASE))
+    {
+        // forward the characters from UART0 to UART5 and back to UART0
+        char a = UARTCharGet(UART0_BASE);
+        UARTCharPut(UART0_BASE, a);
     }
 }
 
@@ -118,10 +181,18 @@ void UART5IntHandler(void)
     uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
     // clear the interrupt signal
     UARTIntClear(UART5_BASE, ui32Status);
+
+    uint32_t charCount = 0;
     // TODO: Test received data, design data receiving logic
     // receive data from UART5
     while (UARTCharsAvail(UART5_BASE))
     {
-        b = UARTCharGet(UART5_BASE);
+        char b = UARTCharGet(UART5_BASE);
+        if (charCount < 3) {
+            charYaw[charCount] = b;
+        } else if (charCount < 6) {
+            charPitch[charCount - 3] = b;
+        }
+        charCount++;
     }
 }
