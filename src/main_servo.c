@@ -40,6 +40,9 @@ void UART0IntHandler(void);
 
 char charYaw[3], charPitch[3];
 int degreeArr[2];
+int prevAngle[2];
+prevAngle[0] = 0;
+prevAngle[1] = 0;
 
 int main()
 {
@@ -150,12 +153,14 @@ int main()
         // SysCtlDelay(SysCtlClockGet() / 3);
         degreeArr[0] = atoi(charYaw);
         degreeArr[1] = atoi(charPitch);
-        yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-        SysCtlDelay(SysCtlClockGet() / 3);
-        pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
-        SysCtlDelay(SysCtlClockGet() / 3);
+        if (degreeArr[0] != prevAngle[0] || degreeArr[1] != prevAngle[1]) {
+            yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
+            PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+            pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
+            PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+            prevAngle[0] = degreeArr[0];
+            prevAngle[1] = degreeArr[1];
+        }
     }
 }
 
