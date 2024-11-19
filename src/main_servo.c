@@ -1,10 +1,4 @@
 #include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include "sensorlib/i2cm_drv.h"
-#include "sensorlib/hw_mpu6050.h"
-#include "sensorlib/mpu6050.h"
-#include "inc/hw_ints.h"
 #include "inc/hw_memmap.h"
 #include "inc/hw_sysctl.h"
 #include "inc/hw_types.h"
@@ -55,18 +49,16 @@ void MPU6050Callback(void *pvCallbackData, uint_fast8_t ui8Status)
     g_bMPU6050Done = true;
 }
 
-//
-// The interrupt handler for the I2C module.
-//
-void I2CMSimpleIntHandler(void)
-{
-    //
-    // Call the I2C master driver interrupt handler.
-    //
-    I2CMIntHandler(&g_sI2CMSimpleInst);
-}
+void UART5IntHandler(void);
+void UART0IntHandler(void);
 
-void Initialization(void)
+char charYaw[3], charPitch[3];
+int degreeArr[2];
+int prevAngle[2];
+prevAngle[0] = 0;
+prevAngle[1] = 0;
+
+int main()
 {
     // enable I2C module 0
     SysCtlPeripheralEnable(SYSCTL_PERIPH_I2C0);
@@ -125,141 +117,125 @@ void InitUART(void)
 
     // Configure UART5 for 115200 baud, 8N1 operation
     UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
-                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
-                         UART_CONFIG_PAR_NONE));
+    (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+
+    // register interrupt handler for UART5
+    UARTIntRegister(UART5_BASE, UART5IntHandler);
+    // enable interrupt for UART5
+    UARTIntEnable(UART5_BASE, UART_INT_RX | UART_INT_RT);
+    // enable interrupt for UART5
+    IntEnable(INT_UART5);
+
+    // enable UART0 and GPIOA to communicate with PC
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    // configure PA0 for RX, PA1 for TX
+    GPIOPinConfigure(GPIO_PA0_U0RX);
+    GPIOPinConfigure(GPIO_PA1_U0TX);
+    // set PA0 and PA1 as type UART
+    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    // set UART0 base address, clock and baud rate
+    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
+                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+    IntEnable(INT_UART0);
+    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
+    UARTIntRegister(UART0_BASE, UART0IntHandler);
+    // enable interrupt master control
+    IntMasterEnable();
+
+    // UART0 connection indicator
+    // UART0 connected if the serial monitor displays `UART0 connected!`
+    UARTCharPut(UART0_BASE, 'U');
+    UARTCharPut(UART0_BASE, 'A');
+    UARTCharPut(UART0_BASE, 'R');
+    UARTCharPut(UART0_BASE, 'T');
+    UARTCharPut(UART0_BASE, '0');
+    UARTCharPut(UART0_BASE, ' ');
+    UARTCharPut(UART0_BASE, 'C');
+    UARTCharPut(UART0_BASE, 'o');
+    UARTCharPut(UART0_BASE, 'n');
+    UARTCharPut(UART0_BASE, 'n');
+    UARTCharPut(UART0_BASE, 'e');
+    UARTCharPut(UART0_BASE, 'c');
+    UARTCharPut(UART0_BASE, 't');
+    UARTCharPut(UART0_BASE, 'e');
+    UARTCharPut(UART0_BASE, 'd');
+    UARTCharPut(UART0_BASE, '!');
+    UARTCharPut(UART0_BASE, '\n');
+
+    while (true)
+    {
+        // yaw_angle = 0;
+        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        // yaw_angle = 90;
+        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        // yaw_angle = 180;
+        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        // yaw_angle = 90;
+        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        // pitch_angle = 60;
+        // pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        // pitch_angle = 90;
+        // pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
+        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 3);
+        degreeArr[0] = atoi(charYaw);
+        degreeArr[1] = atoi(charPitch);
+        if (degreeArr[0] != prevAngle[0] || degreeArr[1] != prevAngle[1]) {
+            yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
+            PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+            pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
+            PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+            prevAngle[0] = degreeArr[0];
+            prevAngle[1] = degreeArr[1];
+        }
+    }
 }
 
-void sendData(float yawAngle, float pitchAngle)
+// handler when Tiva receives data from UART0
+void UART0IntHandler(void)
 {
-    char data[10]; // Increased buffer size for safety
-    
-    // Use more precise formatting
-    snprintf(data, sizeof(data), "%03.0f%03.0f", yawAngle, pitchAngle);
-    
-    // Add error checking for UART transmission
-    while(UARTBusy(UART5_BASE)) {}  // Wait if UART is busy
-    
-    char *chp = data;
-    while (*chp)
+    // get interrupt status
+    uint32_t ui32Status = UARTIntStatus(UART0_BASE, true);
+    // clear the interrupt signal
+    UARTIntClear(UART0_BASE, ui32Status);
+    // receive data from UART0
+    while (UARTCharsAvail(UART0_BASE))
     {
-        while(UARTBusy(UART5_BASE)) {}  // Wait if UART is busy
-        UARTCharPut(UART5_BASE, *chp++);
+        // forward the characters from UART0 to UART5 and back to UART0
+        char a = UARTCharGet(UART0_BASE);
+        UARTCharPut(UART0_BASE, a);
     }
-    
-    while(UARTBusy(UART5_BASE)) {}
-    UARTCharPut(UART5_BASE, '\n');
 }
 
-float applyDeadZone(float value, float threshold) 
+void UART5IntHandler(void)
 {
-    if (fabs(value) < threshold) {
-        return 0.0f;
-    }
-    return value;
-}
+    // get interrupt status
+    uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
+    // clear the interrupt signal
+    UARTIntClear(UART5_BASE, ui32Status);
 
-float applyMovingAverageFilter(float newValue, float* history, int* index) {
-    // Update history
-    history[*index] = newValue;
-    *index = (*index + 1) % FILTER_WINDOW_SIZE;
-    
-    // Calculate average
-    float sum = 0;
-    for(int i = 0; i < FILTER_WINDOW_SIZE; i++) {
-        sum += history[i];
-    }
-    return sum / FILTER_WINDOW_SIZE;
-}
-
-int main()
-{
-    // Set the system clock to use the PLL with a 16 MHz crystal oscillator.
-    // The clock is divided by 1 (SYSCTL_SYSDIV_1) and uses an internal oscillator (SYSCTL_OSC_INT).
-    SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_PLL | SYSCTL_OSC_INT | SYSCTL_XTAL_16MHZ);
-
-    // Initialize UART before using it
-    InitUART();
-
-    // Initialize the system (e.g., peripherals, hardware components)
-    Initialization();
-
-    // Declare arrays to store accelerometer and gyroscope data
-    float fAccel[3], fGyro[3];
-
-    // Reset the MPU6050 sensor by writing to the power management register (PWR_MGMT_1)
-    g_bMPU6050Done = false;
-    MPU6050ReadModifyWrite(&sMPU6050, MPU6050_O_PWR_MGMT_1, 0x00, 0b00000010 & MPU6050_PWR_MGMT_1_DEVICE_RESET, MPU6050Callback, &sMPU6050);
-    while (!g_bMPU6050Done)
+    uint32_t charCount = 0;
+    // TODO: Test received data, design data receiving logic
+    // receive data from UART5
+    while (UARTCharsAvail(UART5_BASE))
     {
-    }
-
-    // Configure the MPU6050 to not be low power mode by writing to the power management register (PWR_MGMT_2)
-    g_bMPU6050Done = false;
-    MPU6050ReadModifyWrite(&sMPU6050, MPU6050_O_PWR_MGMT_2, 0x00, 0x00, MPU6050Callback, &sMPU6050);
-    while (!g_bMPU6050Done)
-    {
-    }
-
-    // Main infinite loop to repeatedly read data from the MPU6050
-    while (1)
-    {
-        //
-        // Request another reading from the MPU6050 sensor
-        //
-        g_bMPU6050Done = false;
-        MPU6050DataRead(&sMPU6050, MPU6050Callback, &sMPU6050);
-        while (!g_bMPU6050Done)
-        {
+        char b = UARTCharGet(UART5_BASE);
+        if (charCount < 3) {
+            charYaw[charCount] = b;
+        } else if (charCount < 6) {
+            charPitch[charCount - 3] = b;
         }
-
-        // Get accelerometer and gyroscope data
-        MPU6050DataAccelGetFloat(&sMPU6050, &fAccel[0], &fAccel[1], &fAccel[2]);
-        MPU6050DataGyroGetFloat(&sMPU6050, &fGyro[0], &fGyro[1], &fGyro[2]);
-
-        // Apply dead zone to reduce noise
-        for(int i = 0; i < 3; i++) {
-            fGyro[i] = applyDeadZone(fGyro[i], GYRO_DEADZONE);
-            fAccel[i] = applyDeadZone(fAccel[i], ACCEL_DEADZONE);
-        }
-
-        // Calculate angles from accelerometer
-        float fAccPitch, fAccRoll;
-        computeAnglesFromAccel(fAccel, &fAccPitch, &fAccRoll);
-
-        // Complementary filter with reduced gyro influence when stationary
-        g_fPitch = g_fComplementaryFilterCoeff * (g_fPitch + fGyro[0] * g_fDeltaTime) +
-                   (1.0f - g_fComplementaryFilterCoeff) * fAccPitch;
-        // Yaw can only be calculated from gyro (no gravity reference)
-        g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime);
-
-        // Normalize yaw to 0-180 degrees
-        if (g_fYaw > 180.0f)
-        {
-            g_fYaw = 180.0f;
-        }
-        else if (g_fYaw < 0.0f)
-        {
-            g_fYaw = 0.0f;
-        }
-
-        // Normalize pitch to 30-90 degrees
-        if (g_fPitch > 90.0f)
-        {
-            g_fPitch = 90.0f;
-        }
-        else if (g_fPitch < 30.0f)
-        {
-            g_fPitch = 30.0f;
-        }
-
-        // Add filtering:
-        g_fYaw = applyMovingAverageFilter(g_fYaw, g_yawHistory, &g_yawFilterIndex);
-        g_fPitch = applyMovingAverageFilter(g_fPitch, g_pitchHistory, &g_pitchFilterIndex);
-
-        // Send the computed angles to the servo controller
-        sendData(g_fYaw, g_fPitch);
-
-        // Increase delay slightly to reduce sampling rate
-        SysCtlDelay(SysCtlClockGet() / (3 * 50)); // Approximately 20ms delay
+        charCount++;
     }
 }
