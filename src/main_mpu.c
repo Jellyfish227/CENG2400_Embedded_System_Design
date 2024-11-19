@@ -130,13 +130,17 @@ void InitUART(void)
 
 void sendData(float yawAngle, float pitchAngle)
 {
-    char data[10];  // Increase buffer size
-    
+    char data[12]; // Increased buffer size for safety
+
     // Add error checking
     while(!UARTSpaceAvail(UART5_BASE))
     {
     }
-    
+
+    // Use snprintf to format the data with 3 decimal places
+    snprintf(data, sizeof(data), "%03.0f%03.0f",
+             roundf(yawAngle), roundf(pitchAngle));
+
     sprintf(data, "%03d%03d\n", (int)yawAngle, (int)pitchAngle);
     
     char *chp = data;
