@@ -1,0 +1,938 @@
+\documentclass[12pt, a4paper]{article}
+    
+\usepackage{homework}
+\usepackage{amsmath}				% For Math
+\usepackage{fancyhdr}				% For fancy header/footer
+\usepackage{graphicx}				% For including figure/image
+\usepackage{cancel}					% To use the slash to cancel out stuff in work
+\usepackage{multirow}
+\usepackage{multicol}
+
+\pagestyle{fancy}
+\setlength{\headheight}{14.5pt}
+\fancyhead[LO,L]{Name: Yu Ching Hei}
+\fancyhead[CO,C]{}
+\fancyhead[RO,R]{SID: 1155193237}
+\fancyfoot[LO,L]{}
+\fancyfoot[CO,C]{}
+\fancyfoot[RO,R]{Page \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\begin{document}
+\section{Lab2 - Polling, Button}
+\begin{code}
+#include <stdint.h>
+#include <stdbool.h>
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/gpio.h"
+#include "inc/hw_gpio.h"
+int32_t ButtonState = 0;
+uint32_t g_w_delay = 2000000;
+uint32_t g_RGB_delay = 20000000;
+uint8_t g_flash_LED = 0;
+
+void read_Switches(void) {
+    if (GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4)) {
+        g_flash_LED = 0;
+    } else {
+        g_flash_LED = 1;
+    }
+}
+
+void RGB_FSM(void) {
+    static enum {ST_RED, ST_GREEN, ST_BLUE, ST_OFF} next_state;
+    if (g_flash_LED == 0) {
+        switch (next_state) {
+            case ST_RED:
+                //Control_RGB_LEDs(1, 0, 0);
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_1);
+                SysCtlDelay(g_RGB_delay);
+                next_state = ST_BLUE;
+                break;
+            case ST_BLUE:
+                //Control_RGB_LEDs(0, 1, 0);
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_2);
+                SysCtlDelay(g_RGB_delay);
+                next_state = ST_GREEN;
+                break;
+            case ST_GREEN:
+                //Control_RGB_LEDs(0, 0, 1);
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_3);
+                SysCtlDelay(g_RGB_delay);
+                next_state = ST_RED;
+                break;
+
+            default:
+                next_state = ST_RED;
+                break;
+        }
+    }
+}
+
+void flash_FSM(void) {
+    static enum {ST_WHITE, ST_BLACK} next_state;
+    if (g_flash_LED == 1) {
+        switch (next_state) {
+            case ST_WHITE:
+                //Control_RGB_LEDs(1, 1, 1);
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3);
+                SysCtlDelay(g_w_delay);
+                next_state = ST_BLACK;
+                break;
+            case ST_BLACK:
+                //Control_RGB_LEDs(0, 0, 0);
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, 0x00);
+                SysCtlDelay(g_w_delay);
+                next_state = ST_WHITE;
+                break;
+            default:
+                next_state = ST_WHITE;
+                break;
+        }
+    }
+}
+
+void flash(void) {
+    read_Switches();
+    flash_FSM();
+    RGB_FSM();
+
+}
+
+int main(void)
+{
+    SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_XTAL_16MHZ|SYSCTL_OSC_MAIN);
+        SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+        GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3);
+        //We use pin4 to control SW1
+        GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4);
+        //Since the button needs some sort of pull-up, we set pin4 as weak pull-up
+        GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+
+        while (1) {
+            flash();
+        }
+}
+\end{code}
+
+\pagebreak
+\section{Lab3 - Timer Interrupts - one shot, Button, FSM}
+\begin{code}
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include "inc/tm4c123gh6pm.h"
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "inc/hw_gpio.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/gpio.h"
+#include "driverlib/timer.h"
+#include "driverlib/interrupt.h"
+
+#define W_DELAY 150
+#define RGB_DELAY 1500
+
+uint8_t g_flash_LED = 0;
+bool timer1finish = 1;
+bool timer0finish = 1;
+
+uint32_t ui32Period;
+
+void Timer1IntHandler(void);
+void Timer0IntHandler(void);
+void PORTF_IRQHandler(void);
+
+void initialization(void)
+{
+    SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+    GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
+    GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4 | GPIO_PIN_0);
+    GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+
+    GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_BOTH_EDGES);
+    GPIOIntEnable(GPIO_PORTF_BASE, GPIO_PIN_4);
+    GPIOIntRegister(GPIO_PORTF_BASE, PORTF_IRQHandler);
+
+    // Configure Timer1
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER1);
+    TimerConfigure(TIMER1_BASE, TIMER_CFG_ONE_SHOT);
+    IntEnable(INT_TIMER1A);
+    TimerIntRegister(TIMER1_BASE, TIMER_A, Timer1IntHandler);
+    TimerIntEnable(TIMER1_BASE, TIMER_TIMA_TIMEOUT);
+
+    ui32Period = SysCtlClockGet() / 1000;
+    TimerLoadSet(TIMER1_BASE, TIMER_A, RGB_DELAY * ui32Period);
+
+    // Configure Timer0
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
+    TimerConfigure(TIMER0_BASE, TIMER_CFG_ONE_SHOT);
+    IntEnable(INT_TIMER0A);
+    TimerIntRegister(TIMER0_BASE, TIMER_A, Timer0IntHandler);
+    TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+
+    TimerLoadSet(TIMER0_BASE, TIMER_A, W_DELAY * ui32Period);
+
+    IntMasterEnable();
+}
+
+// TODO: Using GPIO Interrupt to replace the function Read_Switches_Timer()
+void PORTF_IRQHandler(void)
+{
+    // Check if the interrupt was triggered by PD4
+    if (GPIOIntStatus(GPIO_PORTF_BASE, true) & GPIO_INT_PIN_4)
+    {
+        // Toggle the LED or perform your action
+        if (GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4))
+            g_flash_LED = 0; // Button released
+        else
+            g_flash_LED = 1; // Button pressed
+
+    }
+    // Clear the interrupt flag
+    GPIOIntClear(GPIO_PORTF_BASE, GPIO_INT_PIN_4);
+}
+
+void Timer1IntHandler(void)
+{
+    TimerIntClear(TIMER1_BASE, TIMER_TIMA_TIMEOUT);
+    timer1finish = 1;
+}
+
+void Timer0IntHandler(void)
+{
+    TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+    timer0finish = 1;
+}
+
+void Flash_Timer(void)
+{
+    // TODO: Implement this function similar to RGB_Timer()
+    static enum {W, W_wait, OFF, OFF_wait} next_state;
+    if (g_flash_LED == 1) {
+        switch (next_state) {
+            case W:
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
+                timer0finish = 0;
+                TimerEnable(TIMER0_BASE, TIMER_A);
+                next_state = W_wait;
+                break;
+            case W_wait:
+                if (timer0finish)
+                    next_state = OFF;
+                break;
+            case OFF:
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
+                timer0finish = 0;
+                TimerEnable(TIMER0_BASE, TIMER_A);
+                next_state = OFF_wait;
+                break;
+            case OFF_wait:
+                if (timer0finish)
+                    next_state = W;
+                break;
+            default:
+                next_state = W;
+                break;
+        }
+    }
+}
+
+void RGB_Timer(void)
+{
+    if (g_flash_LED == 0)
+    {
+        static enum { R,
+                      R_wait,
+                      G,
+                      G_wait,
+                      B,
+                      B_wait } next_state;
+        switch (next_state)
+        {
+        case R:
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_1);
+            timer1finish = 0;
+            TimerEnable(TIMER1_BASE, TIMER_A);
+            next_state = R_wait;
+            break;
+        case R_wait:
+            if (timer1finish)
+                next_state = G;
+            break;
+        case G:
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_2);
+            timer1finish = 0;
+
+            TimerEnable(TIMER1_BASE, TIMER_A);
+            next_state = G_wait;
+            break;
+        case G_wait:
+            if (timer1finish)
+                next_state = B;
+            break;
+        case B:
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_3);
+            timer1finish = 0;
+            TimerEnable(TIMER1_BASE, TIMER_A);
+            next_state = B_wait;
+            break;
+        case B_wait:
+            if (timer1finish)
+                next_state = R;
+            break;
+        default:
+            next_state = R;
+            break;
+        }
+    }
+}
+
+int main(void)
+{
+    initialization();
+    g_flash_LED = 0;
+    while (1)
+    {
+        RGB_Timer();
+        Flash_Timer();
+    }
+}
+\end{code}
+
+\pagebreak
+\section{Lab4 - LCD, Keypad}
+\begin{code}
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include "inc/tm4c123gh6pm.h"
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/interrupt.h"
+#include "driverlib/gpio.h"
+#include "driverlib/timer.h"
+#define RS_PIN GPIO_PIN_5   // select pin 5 for RS
+#define RW_PIN GPIO_PIN_6   // select pin 6 for RS
+#define EN_PIN GPIO_PIN_7   // select pin 7 for EN
+#define DB_PIN GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7                            // select pins 0~7 for DB
+#define ROW GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4           // select pins 1~4 for ROW
+#define COL GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6                        // select pins 4~6 for COL
+
+void flushInput(uint32_t ui32Port, uint8_t ui8Pins);
+void delayUs(int n);
+void LCD_command(bool rs, bool rw, unsigned char data);
+char *message_str1 = "Please Enter:";
+char *message_str2 = "                    ";
+int flag;
+int n;
+int cursor_pos = 0xC0;
+int inputEnable = 1;
+int main(void)
+{
+begin:
+    SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+    GPIOPinTypeGPIOOutput(GPIO_PORTB_BASE, DB_PIN);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    GPIOPinTypeGPIOOutput(GPIO_PORTA_BASE, RS_PIN | RW_PIN | EN_PIN);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+    GPIOPinTypeGPIOOutput(GPIO_PORTE_BASE, ROW);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
+    GPIOPinTypeGPIOInput(GPIO_PORTC_BASE, COL);
+    GPIOPadConfigSet(GPIO_PORTC_BASE, COL, GPIO_STRENGTH_4MA, GPIO_PIN_TYPE_STD_WPU);
+    /* LCD configuration */
+    LCD_command(0, 0, 0x38); // SET FUNCTION: specify 8-bit interface, 2 line display, and 5x7 dots (font)
+    LCD_command(0, 0, 0x08); // DISPLAY OFF: set display off
+    LCD_command(0, 0, 0x01); // DISPLAY CLEAR: set display clear
+    LCD_command(0, 0, 0x06); // ENTRY MODE SET: set cursor move direction as decreasing & display is not shifted
+    LCD_command(0, 0, 0x0F); // DISPLAY ON/OFF: set display on, cursor on, & cursor blinking on
+    LCD_command(0, 0, 0x80); // SET DD DRAM ADDRESS: set cursor to the first line
+    n = 0;
+    while (message_str1[n] != '\0')
+    {
+        LCD_command(1, 0, message_str1[n]); // WRITE DATA: display message_str1[n] on the LCD
+        n++;
+    }
+    LCD_command(0, 0, cursor_pos); // SET DD DRAM ADDRESS: set cursor to the first line
+
+    while (1)
+    {
+
+        GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x1C); // first row
+        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4) && inputEnable)
+        {
+            LCD_command(0, 0, cursor_pos++); // display behind "Please Enter:"
+            LCD_command(1, 0, '1');
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_4);
+        }
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5) && inputEnable)
+        {
+            LCD_command(0, 0, cursor_pos++);
+            LCD_command(1, 0, '2');
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
+        }
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6) && inputEnable)
+        {
+            LCD_command(0, 0, cursor_pos++);
+            LCD_command(1, 0, '3');
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_6);
+        }
+
+        GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x1A); // second row
+        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4) && inputEnable)
+        {
+            LCD_command(0, 0, cursor_pos++);
+            LCD_command(1, 0, '4');
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_4);
+        }
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5) && inputEnable)
+        {
+            LCD_command(0, 0, cursor_pos++);
+            LCD_command(1, 0, '5');
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
+        }
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6) && inputEnable)
+        {
+            LCD_command(0, 0, cursor_pos++);
+            LCD_command(1, 0, '6');
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_6);
+        }
+
+        GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x16); // third row
+        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4) && inputEnable)
+        {
+            LCD_command(0, 0, cursor_pos++);
+            LCD_command(1, 0, '7');
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_4);
+        }
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5) && inputEnable)
+        {
+            LCD_command(0, 0, cursor_pos++);
+            LCD_command(1, 0, '8');
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
+        }
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6) && inputEnable)
+        {
+            LCD_command(0, 0, cursor_pos++);
+            LCD_command(1, 0, '9');
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_6);
+        }
+
+        GPIOPinWrite(GPIO_PORTE_BASE, ROW, 0x0E); // forth row
+        if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_4)) // *
+        {
+            LCD_command(0, 0, 0x01); // DISPLAY CLEAR: set display clear
+            cursor_pos = 0xC0;
+            inputEnable = 1;
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
+            goto begin;
+        }
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_5) && inputEnable)
+        {
+            LCD_command(0, 0, cursor_pos++);
+            LCD_command(1, 0, '0');
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_5);
+        }
+        else if (!GPIOPinRead(GPIO_PORTC_BASE, GPIO_PIN_6))
+        {
+            LCD_command(0, 0, 0b01100); // DISPLAY ON/OFF: set display on, cursor on, & cursor blinking on
+            inputEnable = 0;
+            flushInput(GPIO_PORTC_BASE, GPIO_PIN_6);
+        }
+
+        if (cursor_pos > 0xCF) {
+            cursor_pos = 0xC0;
+        }
+    }
+}
+
+void flushInput(uint32_t ui32Port, uint8_t ui8Pins)
+{
+    /* wait until the key is release to avoid redundant inputs. */
+    while (!GPIOPinRead(ui32Port, ui8Pins))
+    {
+        delayUs(100000);
+    }
+}
+
+void delayUs(int n)
+{
+    SysCtlDelay((n * 40) / 3);
+}
+void LCD_command(bool rs, bool rw, unsigned char data)
+{
+    if (rs == 0)                                     // L: Command H: Data
+        GPIOPinWrite(GPIO_PORTA_BASE, RS_PIN, 0x00); // set RS as L
+    else
+        GPIOPinWrite(GPIO_PORTA_BASE, RS_PIN, 0x20); // set RS as H
+    if (rw == 0)                                     // L: Write mode; H: Read mode
+        GPIOPinWrite(GPIO_PORTA_BASE, RW_PIN, 0x00); // set RW as L
+    else
+        GPIOPinWrite(GPIO_PORTA_BASE, RW_PIN, 0x40); // set RW as H
+    delayUs(1);
+    GPIOPinWrite(GPIO_PORTA_BASE, EN_PIN, 0x80); // set H to enable signal EN
+    GPIOPinWrite(GPIO_PORTB_BASE, DB_PIN, data); // assign DB0~DB7 with "data"
+    delayUs(1);
+    GPIOPinWrite(GPIO_PORTA_BASE, EN_PIN, 0x00); // set H->L to enable signal EN
+    delayUs(1);
+    if (rs == 0) // L: Command
+    {
+        if ((data == 0x01) | (data == 0x02) | (data == 0x03))
+            delayUs(1640); // Clear Display & Display/Cursor Home take 1.64ms
+        else
+            delayUs(40); // all the others commands require only 40us to execute
+    }
+    else
+        delayUs(40); // Data Write takes 40us to execute
+}
+\end{code}
+
+\pagebreak
+\section{Lab5 - UART, Bluetooth, Interrupts}
+\textbf{main\_at.c}
+\begin{code}
+/*
+### UART communication with bluetooth HC-05 and PC ###
+UART0 used to communicate with PC
+UART5 used to communicate with BLUETOOTH HC-05
+UART5IntHandler to handle interrupt
+
+Hardware connection:
+RXD -> PE5
+TXD -> PE4
+GND -> GND
+VCC -> VBUS
+
+Steps:
+1. Enable AT mode and configure the bluetooth module
+    1.1 Connect bluetooth-EN to Tiva-VCC to enable AT mode. AT mode is correctly enabled if the LED blinks slowly (around 2-second period)
+    1.2 Use the following AT commands: AT+UART? / AT+ROLE? / AT+ADDR? to check the current configuration
+    1.3 Set the baud rate (AT+UART) of both the master and the slave 38400
+    1.4 Set the role (AT+ROLE) of the master 1, the slave 0
+    1.5 Enable the fixed-address mode (AT+CMODE) of the master
+    1.6 Bind (AT+BIND) the destination of the master to the slave address (AT+ADDR?)
+2. Disconnect bluetooth-EN and Tiva-VCC to disable AT mode
+3. Complete, compile and run the code
+*/
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "driverlib/gpio.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/uart.h"
+#include "utils/uartstdio.h"
+#include "inc/hw_ints.h"
+#include "driverlib/interrupt.h"
+
+void UART0IntHandler(void);
+void UART5IntHandler(void);
+
+int main(void) {
+    // set clock
+    SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
+
+    // enable UART0 and GPIOA to communicate with PC
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    // configure PA0 for RX, PA1 for TX
+    GPIOPinConfigure(GPIO_PA0_U0RX);
+    GPIOPinConfigure(GPIO_PA1_U0TX);
+    // set PA0 and PA1 as type UART
+    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    // set UART0 base address, clock and baud rate
+    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
+        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+
+    // enable UART5 and GPIOE to communicate with BLUETOOTH
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART5);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+    // configure PE4 for RX, PE5 for TX
+    GPIOPinConfigure(GPIO_PE4_U5RX);
+    GPIOPinConfigure(GPIO_PE5_U5TX);
+    // set PE4 and PE5 as type UART
+    GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
+    // set UART5 base address, clock and baud rate
+    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
+        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+
+    // configure interrupts
+    IntMasterEnable();
+    IntEnable(INT_UART0);
+    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
+    UARTIntRegister(UART0_BASE, UART0IntHandler);
+    IntEnable(INT_UART5);
+    UARTIntEnable(UART5_BASE, UART_INT_RX | UART_INT_RT);
+    UARTIntRegister(UART5_BASE, UART5IntHandler);
+
+    // UART0 connection indicator
+    // UART0 connected if the serial monitor displays `UART0 connected!`
+    UARTCharPut(UART0_BASE, 'U');
+    UARTCharPut(UART0_BASE, 'A');
+    UARTCharPut(UART0_BASE, 'R');
+    UARTCharPut(UART0_BASE, 'T');
+    UARTCharPut(UART0_BASE, '0');
+    UARTCharPut(UART0_BASE, ' ');
+    UARTCharPut(UART0_BASE, 'C');
+    UARTCharPut(UART0_BASE, 'o');
+    UARTCharPut(UART0_BASE, 'n');
+    UARTCharPut(UART0_BASE, 'n');
+    UARTCharPut(UART0_BASE, 'e');
+    UARTCharPut(UART0_BASE, 'c');
+    UARTCharPut(UART0_BASE, 't');
+    UARTCharPut(UART0_BASE, 'e');
+    UARTCharPut(UART0_BASE, 'd');
+    UARTCharPut(UART0_BASE, '!');
+    UARTCharPut(UART0_BASE, '\n');
+
+    while (true) {}
+}
+
+// handler when Tiva receives data from UART0
+void UART0IntHandler(void)
+{
+    // get interrupt status
+    uint32_t ui32Status = UARTIntStatus(UART0_BASE, true);
+    // clear the interrupt signal
+    UARTIntClear(UART0_BASE, ui32Status);
+    // receive data from UART0
+    while (UARTCharsAvail(UART0_BASE))
+    {
+        // forward the characters from UART0 to UART5 and back to UART0
+        char a = UARTCharGet(UART0_BASE);
+        UARTCharPut(UART5_BASE, a);
+        UARTCharPut(UART0_BASE, a);
+    }
+}
+
+// handler when Tiva receives data from UART5
+void UART5IntHandler(void)
+{
+    // get interrupt status
+    uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
+    // clear the interrupt signal
+    UARTIntClear(UART5_BASE, ui32Status);
+    // receive data from UART5
+    while (UARTCharsAvail(UART5_BASE))
+    {
+        // forward the characters from UART5 to UART0
+        char b = UARTCharGet(UART5_BASE);
+        UARTCharPut(UART0_BASE, b);
+    }
+}
+\end{code}
+\text{   }
+\linebreak
+\textbf{main\_master.c}
+\begin{code}
+/*
+### UART communication with bluetooth HC-05 and PC ###
+UART0 used to communicate with PC
+UART5 used to communicate with BLUETOOTH HC-05
+
+Hardware connection:
+RXD -> PE5
+TXD -> PE4
+GND -> GND
+VCC -> VBUS
+
+Steps:
+1. Enable AT mode and configure the bluetooth module
+    1.1 Connect bluetooth-EN to Tiva-VCC to enable AT mode. AT mode is correctly enabled if the LED blinks slowly (around 2-second period)
+    1.2 Use the following AT commands: AT+UART? / AT+ROLE? / AT+ADDR? to check the current configuration
+    1.3 Set the baud rate (AT+UART) of both the master and the slave 38400
+    1.4 Set the role (AT+ROLE) of the master 1, the slave 0
+    1.5 Enable the fixed-address mode (AT+CMODE) of the master
+    1.6 Bind (AT+BIND) the destination of the master to the slave address (AT+ADDR?)
+2. Disconnect bluetooth-EN and Tiva-VCC to disable AT mode
+3. Complete, compile and run the code
+*/
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "driverlib/gpio.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/uart.h"
+#include "utils/uartstdio.h"
+#include "inc/hw_ints.h"
+#include "driverlib/interrupt.h"
+
+
+void PORTF_IRQHandler(void);
+
+int main(void) {
+    // set clock
+    SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
+
+    // TODO: YOUR UART INITIALIZATION PROCEDURE
+    // enable UART5 and GPIOE to communicate with BLUETOOTH
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART5);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+    // configure PE4 for RX, PE5 for TX
+    GPIOPinConfigure(GPIO_PE4_U5RX);
+    GPIOPinConfigure(GPIO_PE5_U5TX);
+    // set PORTE pin4 and pin5 as type UART
+    GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
+    // set UART5 base address, clock and baud rate
+    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
+        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+
+    // enable SW1 of GPIOF for button control
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+    GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4);
+    GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+
+    // TODO: YOUR BUTTON CONTROL PROCEDURE
+    // you can do
+    // polling (i.e., checking button status and send data in a while loop), or
+    // interrupt (i.e., writing an interrupt function to check button status and send data)
+    GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_BOTH_EDGES);
+    GPIOIntEnable(GPIO_PORTF_BASE, GPIO_PIN_4);
+    GPIOIntRegister(GPIO_PORTF_BASE, PORTF_IRQHandler);
+    IntMasterEnable();
+}
+
+void PORTF_IRQHandler(void)
+{
+    // Check if the interrupt was triggered by PD4
+    if (GPIOIntStatus(GPIO_PORTF_BASE, true) & GPIO_INT_PIN_4)
+    {
+        char a;
+        // Toggle the LED or perform your action
+        if (GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4))
+            a = 'Y';
+        else
+            a = 'X'; // Button pressed
+
+        UARTCharPut(UART5_BASE, a);
+    }
+    // Clear the interrupt flag
+    GPIOIntClear(GPIO_PORTF_BASE, GPIO_INT_PIN_4);
+}
+\end{code}
+\text{   }
+\linebreak
+\textbf{main\_slave.c}
+\begin{code}
+/*
+### UART communication with bluetooth HC-05 and PC ###
+UART0 used to communicate with PC
+UART5 used to communicate with BLUETOOTH HC-05
+UART5IntHandler to handle interrupt
+
+Hardware connection:
+RXD -> PE5
+TXD -> PE4
+GND -> GND
+VCC -> VBUS
+
+Steps:
+1. Enable AT mode and configure the bluetooth module
+    1.1 Connect bluetooth-EN to Tiva-VCC to enable AT mode. AT mode is correctly enabled if the LED blinks slowly (around 2-second period)
+    1.2 Use the following AT commands: AT+UART? / AT+ROLE? / AT+ADDR? to check the current configuration
+    1.3 Set the baud rate (AT+UART) of both the master and the slave 38400
+    1.4 Set the role (AT+ROLE) of the master 1, the slave 0
+    1.5 Enable the fixed-address mode (AT+CMODE) of the master
+    1.6 Bind (AT+BIND) the destination of the master to the slave address (AT+ADDR?)
+2. Disconnect bluetooth-EN and Tiva-VCC to disable AT mode
+3. Complete, compile and run the code
+*/
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "driverlib/gpio.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/uart.h"
+#include "utils/uartstdio.h"
+#include "inc/hw_ints.h"
+#include "driverlib/interrupt.h"
+
+bool led_on = false;
+
+void UART5IntHandler(void);
+
+int main(void) {
+    // set clock
+    SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
+
+    // TODO: YOUR UART INITIALIZATION PROCEDURE
+
+
+    // enable UART5 and GPIOE to communicate with BLUETOOTH
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART5);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+    // configure PE4 for RX, PE5 for TX
+    GPIOPinConfigure(GPIO_PE4_U5RX);
+    GPIOPinConfigure(GPIO_PE5_U5TX);
+    // set PORTE pin4 and pin5 as type UART
+    GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
+    // set UART5 base address, clock and baud rate
+    UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
+    (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+
+    // enable LED of GPIOF for display
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+    GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
+
+    // TODO: YOUR UART INTERRUPT INITIALIZATION PROCEDURE
+    UARTIntRegister(UART5_BASE, UART5IntHandler); // Register handler
+    UARTIntEnable(UART5_BASE, UART_INT_RX | UART_INT_RT); // Enable interrupt
+    IntEnable(INT_UART5); // Enable the processor to handle UART5 interrupts
+    IntMasterEnable(); // Enable global interrupts
+    // set interrupt
+
+    while (true)
+    {
+        if (led_on) {
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
+        }
+        else {
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
+        }
+    }
+}
+
+// TODO: YOUR UART INTERRUPT HANDLER
+
+// handler when Tiva receives data from UART5
+void UART5IntHandler(void)
+{
+    // get interrupt status
+        uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
+        // clear the interrupt signal
+        UARTIntClear(UART5_BASE, ui32Status);
+        // receive data from UART5
+        char b;
+        while (UARTCharsAvail(UART5_BASE))
+        {
+            // forward the characters from UART5 to UART0
+            b = UARTCharGet(UART5_BASE);
+//            UARTCharPut(UART0_BASE, b);
+        }
+    // set `led_on` according to the received data
+        if (b == 'X') {
+            led_on = true;
+        } else if (b == 'Y') {
+           led_on = false;
+       }
+
+}
+\end{code}
+\pagebreak
+\section{Lab6 - ADC, Interrupts, Timer Periodic}
+\begin{code}
+#include <stdint.h>
+#include <stdbool.h>
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "inc/hw_ints.h"
+#include "inc/tm4c123gh6pm.h"
+#include "inc/hw_gpio.h"
+#include "driverlib/debug.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/adc.h"
+#include "driverlib/interrupt.h"
+#include "driverlib/gpio.h"
+#include "driverlib/timer.h"
+
+uint32_t ui32ADC0Value[4];
+volatile uint32_t ui32VolAvg;
+volatile uint32_t ui32TempValueC;
+volatile uint32_t ui32TempValueF;
+
+void ADC0IntHandler(void) {
+    //
+    // Clear the ADC interrupt flag
+    //
+    ADCIntClear(ADC0_BASE, 1);
+    
+    //
+    // Get the ADC data
+    //
+    ADCSequenceDataGet(ADC0_BASE, 1, ui32ADC0Value);
+    
+    //
+    // Calculate average voltage value
+    //
+    ui32VolAvg = (ui32ADC0Value[0] + ui32ADC0Value[1] + ui32ADC0Value[2] + ui32ADC0Value[3] + 2) / 4;
+    
+    //
+    // TODO: Convert the voltage to Celsius and Fahrenheit
+    //
+    ui32TempValueC = 147.5 - ((75 * ui32VolAvg * 3.3) / 4096);
+    ui32TempValueF = (ui32TempValueC * 1.8) + 32;
+}
+
+int main(void) {
+    //
+    // Set up the system clock
+    //
+    SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
+
+    //
+    // The ADC0 peripheral must be enabled for use.
+    //
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);
+    
+    //
+    // Enable sample sequence 2 with a timer trigger. Sequence 2
+    // will do 4 sampleS when the processor sends a singal to start the
+    // conversion. Each ADC module has 4 programmable sequences, sequence 0
+    // to sequence 3. This example is arbitrarily using sequence 2.
+    //
+    ADCSequenceConfigure(ADC0_BASE, 1, ADC_TRIGGER_TIMER, 0);
+
+    //
+    // Configure step 0-3 on sequence 2. Sample the temperature sensor
+    // (ADC_CTL_TS) and configure the interrupt flag (ADC_CTL_IE) to be set
+    // when the sample is done. Tell the ADC logic that this is the last
+    // conversion on sequence 2 (ADC_CTL_END).  Sequence 2 and Sequence 1 have 4
+    // programmable stepS. Sequence 3 has 1 programmable step, and sequence 0 has
+    // 8 programmable steps. For more information on the
+    // ADC sequences and steps, reference the datasheet.
+    //
+    ADCSequenceStepConfigure(ADC0_BASE, 1, 0, ADC_CTL_TS);
+    ADCSequenceStepConfigure(ADC0_BASE, 1, 1, ADC_CTL_TS);
+    ADCSequenceStepConfigure(ADC0_BASE, 1, 2, ADC_CTL_TS);
+    ADCSequenceStepConfigure(ADC0_BASE, 1, 3, ADC_CTL_TS | ADC_CTL_IE | ADC_CTL_END);
+
+    //
+    // Since sample sequence 2 is now configured, it must be enabled.
+    //
+    ADCSequenceEnable(ADC0_BASE, 1);
+    
+    //
+    // TODO: Configure Timer to trigger the ADC
+    //
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
+    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
+    TimerLoadSet(TIMER0_BASE, TIMER_A, SysCtlClockGet() / 10);
+
+    //
+    // Register the ADC interrupt handler and enable ADC interrupt
+    //
+    ADCIntRegister(ADC0_BASE, 1, ADC0IntHandler);
+    IntEnable(INT_ADC0SS1);
+    ADCIntEnable(ADC0_BASE, 1);
+
+    TimerControlTrigger(TIMER0_BASE,TIMER_A,true);
+    TimerEnable(TIMER0_BASE, TIMER_A);
+    while(1) {
+    }
+}
+\end{code}
+\end{document}
