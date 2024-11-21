@@ -1,0 +1,7 @@
+*.vscode
+*.metadata
+*.jxbrowser.userdata
+*dvt
+*RemoteSystemsTempFiles
+*Project
+*.DS_Store
