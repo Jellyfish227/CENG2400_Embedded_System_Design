@@ -1,6 +1,6 @@
 # Fdb version 4
-["pdflatex"] 1732211192.16134 "/Users/jellyfish/Documents/CUHK/Year_3/Fall/CENG2400_Embedded_System_Design/cheatsheet/lab.tex" "lab.pdf" "lab" 1732211193.70027 0
-  "/Users/jellyfish/Documents/CUHK/Year_3/Fall/CENG2400_Embedded_System_Design/cheatsheet/lab.tex" 1732211190.19678 30664 0375fad23a5749a804b8daf3062d55cf ""
+["pdflatex"] 1732475688.76731 "/Users/jellyfish/Documents/CUHK/Year_3/Fall/CENG2400_Embedded_System_Design/cheatsheet/lab.tex" "lab.pdf" "lab" 1732475690.16882 0
+  "/Users/jellyfish/Documents/CUHK/Year_3/Fall/CENG2400_Embedded_System_Design/cheatsheet/lab.tex" 1732475688.09756 38383 3710b9cb265a301e4b489794bda89288 ""
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/map/fontname/texfonts.map" 1710106625 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/map/pdftex/updmap/pdftex.map" 1710106625 5472554 f7861620179a71a79d4bd86251f559d0 ""
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/tfm/public/cm/cmbx12.tfm" 1710106625 1324 c910af8c371558dc20f2d7822f66fe64 ""
@@ -192,8 +192,8 @@
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/web2c/texmf.cnf" 1710106625 41652 e14926ab86fde7902cad99d9eeaa5ca5 ""
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-var/web2c/pdftex/pdflatex.fmt" 1710106625 8221880 586024644079ee3bb0c221d6d52d1611 ""
   "homework.sty" 1732210989.787 4788 4fa571382f9eadbbde46f7b9c386fcad ""
-  "lab.aux" 1732211193.60915 3036 207049aa4464ff81182df694db2bd36e "pdflatex"
-  "lab.tex" 1732211190.19678 30664 0375fad23a5749a804b8daf3062d55cf ""
+  "lab.aux" 1732475690.08966 3552 6fc9c78362387fa6eae22567d4661c67 "pdflatex"
+  "lab.tex" 1732475688.09756 38383 3710b9cb265a301e4b489794bda89288 ""
   (generated)
   "lab.aux"
   "lab.log"

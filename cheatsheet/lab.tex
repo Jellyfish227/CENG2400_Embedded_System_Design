@@ -935,4 +935,232 @@ int main(void) {
     }
 }
 \end{code}
+\pagebreak
+\section{Project - PWM, Motion sensing}
+\textbf{mpu.c}
+\begin{code}
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include "sensorlib/i2cm_drv.h"
+#include "sensorlib/hw_mpu6050.h"
+#include "sensorlib/mpu6050.h"
+#include "inc/hw_ints.h"
+#include "inc/hw_memmap.h"
+#include "inc/hw_sysctl.h"
+#include "inc/hw_types.h"
+#include "inc/hw_i2c.h"
+#include "inc/hw_types.h"
+#include "inc/hw_gpio.h"
+#include "driverlib/gpio.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/interrupt.h"
+#include "driverlib/i2c.h"
+#include "driverlib/sysctl.h"
+
+volatile bool g_bMPU6050Done;
+tMPU6050 sMPU6050;
+tI2CMInstance g_sI2CMSimpleInst;
+
+//
+// The function that is provided by this example as a callback when MPU6050
+// transactions have completed.
+//
+void MPU6050Callback(void *pvCallbackData, uint_fast8_t ui8Status)
+{
+    // See if an error occurred.
+    if (ui8Status != I2CM_STATUS_SUCCESS)
+    {
+    }
+
+    // Indicate that the MPU6050 transaction has completed.
+    g_bMPU6050Done = true;
+}
+
+//
+// The interrupt handler for the I2C module.
+//
+void I2CMSimpleIntHandler(void)
+{
+    //
+    // Call the I2C master driver interrupt handler.
+    //
+    I2CMIntHandler(&g_sI2CMSimpleInst);
+}
+
+void Initialization(void)
+{
+    //enable I2C module 0
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_I2C0);
+
+    //reset module
+    SysCtlPeripheralReset(SYSCTL_PERIPH_I2C0);
+
+    //enable GPIO peripheral that contains I2C 0
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+
+    // Configure the pin muxing for I2C0 functions on port B2 and B3.
+    GPIOPinConfigure(GPIO_PB2_I2C0SCL);
+    GPIOPinConfigure(GPIO_PB3_I2C0SDA);
+
+    // Select the I2C function for these pins.
+    GPIOPinTypeI2CSCL(GPIO_PORTB_BASE, GPIO_PIN_2);
+    GPIOPinTypeI2C(GPIO_PORTB_BASE, GPIO_PIN_3);
+
+    // Enable and initialize the I2C0 master module.
+    // Use the system clock for the I2C0 module.
+    I2CMasterInitExpClk(I2C0_BASE, SysCtlClockGet(), true);
+
+    //clear I2C FIFOs
+    HWREG(I2C0_BASE + I2C_O_FIFOCTL) = 80008000;
+
+    // Initialize the I2C master driver.
+    I2CMInit(&g_sI2CMSimpleInst, I2C0_BASE, INT_I2C0, 0xff, 0xff, SysCtlClockGet());
+    // Register the interrupt handler for I2C interrupts
+    I2CIntRegister(I2C0_BASE, I2CMSimpleIntHandler);
+
+    // Configure the MPU6050
+    g_bMPU6050Done = false;
+    MPU6050Init(&sMPU6050, &g_sI2CMSimpleInst, 0x68, MPU6050Callback, &sMPU6050);
+    while (!g_bMPU6050Done)
+    {
+    }
+
+}
+
+int main()
+{
+    // Set the system clock to use the PLL with a 16 MHz crystal oscillator.
+    // The clock is divided by 1 (SYSCTL_SYSDIV_1) and uses an internal oscillator (SYSCTL_OSC_INT).
+    SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_PLL | SYSCTL_OSC_INT | SYSCTL_XTAL_16MHZ);
+
+    // Initialize the system (e.g., peripherals, hardware components)
+    Initialization();
+
+    // Declare arrays to store accelerometer and gyroscope data
+    float fAccel[3], fGyro[3];
+
+    // Reset the MPU6050 sensor by writing to the power management register (PWR_MGMT_1)
+    g_bMPU6050Done = false;
+    MPU6050ReadModifyWrite(&sMPU6050, MPU6050_O_PWR_MGMT_1, 0x00, 0b00000010 & MPU6050_PWR_MGMT_1_DEVICE_RESET, MPU6050Callback, &sMPU6050);
+    while (!g_bMPU6050Done)
+    {
+    }
+
+    // Configure the MPU6050 to not be low power mode by writing to the power management register (PWR_MGMT_2)
+    g_bMPU6050Done = false;
+    MPU6050ReadModifyWrite(&sMPU6050, MPU6050_O_PWR_MGMT_2, 0x00, 0x00, MPU6050Callback, &sMPU6050);
+    while (!g_bMPU6050Done)
+    {
+    }
+
+    // Main infinite loop to repeatedly read data from the MPU6050
+    while (1)
+    {
+        //
+        // Request another reading from the MPU6050 sensor
+        //
+        g_bMPU6050Done = false;
+        MPU6050DataRead(&sMPU6050, MPU6050Callback, &sMPU6050);
+        while (!g_bMPU6050Done)
+        {
+        }
+
+        // Extract the accelerometer data (in floating-point format)
+        MPU6050DataAccelGetFloat(&sMPU6050, &fAccel[0], &fAccel[1], &fAccel[2]);
+
+        // Extract the gyroscope data (in floating-point format)
+        MPU6050DataGyroGetFloat(&sMPU6050, &fGyro[0], &fGyro[1], &fGyro[2]);
+    }
+}
+\end{code}
+\textbf{\newline servo.h}
+\begin{code}
+// hardware connection:
+// servo red wire -> V Bus
+// servo brown wire -> GND
+// servo (pitch) orange wire -> PD0
+// servo (yaw) orange wire -> PD1
+// pitch: up-down, yaw: left-right
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "inc/hw_gpio.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/gpio.h"
+#include "driverlib/debug.h"
+#include "driverlib/pwm.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/rom.h"
+
+float servo_pwm_freq = 50;
+
+// determine the duty cycle according to the desired angle
+float angleToPWMDutyCycle(float angle)
+{
+    // angle (duty cycle): 0 (0.5ms/20ms), 90 (1.5ms/20ms), 180 (2.5ms/20ms)
+    // angle to pulse width: pulse_width = angle / 90 + 0.5
+    // pulse width to duty cycle: duty_cycle = pulse_width / period
+    // valid angle range: 0-180
+    return (angle / 90 + 0.5) / (1000 / servo_pwm_freq);
+}
+
+int main()
+{
+    // set the system clock and the PWM clock
+    // system clock frequency : PWM clock frequency = 64 : 1
+    SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
+    SysCtlPWMClockSet(SYSCTL_PWMDIV_64);
+    // enable module PWM1
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM1);
+    SysCtlDelay(SysCtlClockGet() / 30); // avoid program overheat & logic issues
+    // configure generator 0 of PWM1
+    PWMGenEnable(PWM1_BASE, PWM_GEN_0);
+    PWMGenConfigure(PWM1_BASE, PWM_GEN_0, PWM_GEN_MODE_DOWN);
+    // calculate the number of PWM instruction cycles in each PWM period
+    uint32_t pwm_period = (SysCtlClockGet() / 64 / servo_pwm_freq);
+    PWMGenPeriodSet(PWM1_BASE, PWM_GEN_0, pwm_period);
+    // enable the 0th and 1st outputs of PWM1
+    PWMOutputState(PWM1_BASE, PWM_OUT_0_BIT, true);
+    PWMOutputState(PWM1_BASE, PWM_OUT_1_BIT, true);
+    // PD0 and PD1 to send the signals to the servos
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+    GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_0);
+    GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_1);
+    GPIOPinConfigure(GPIO_PD0_M1PWM0);
+    GPIOPinConfigure(GPIO_PD1_M1PWM1);
+
+    float pitch_angle, yaw_angle, pitch_duty_cycle, yaw_duty_cycle;
+
+    while (true)
+    {
+        yaw_angle = 0;
+        yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        SysCtlDelay(SysCtlClockGet() / 3);
+        yaw_angle = 90;
+        yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        SysCtlDelay(SysCtlClockGet() / 3);
+        yaw_angle = 180;
+        yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        SysCtlDelay(SysCtlClockGet() / 3);
+        yaw_angle = 90;
+        yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        SysCtlDelay(SysCtlClockGet() / 3);
+        pitch_angle = 60;
+        pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+        SysCtlDelay(SysCtlClockGet() / 3);
+        pitch_angle = 90;
+        pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+        SysCtlDelay(SysCtlClockGet() / 3);
+    }
+}
+\end{code}
 \end{document}
