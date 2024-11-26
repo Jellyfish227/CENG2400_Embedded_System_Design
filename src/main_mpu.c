@@ -122,22 +122,6 @@ void InitUART(void)
                         (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
                          UART_CONFIG_PAR_NONE));
 
-    // enable UART0 and GPIOA to communicate with PC
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
-    // configure PA0 for RX, PA1 for TX
-    GPIOPinConfigure(GPIO_PA0_U0RX);
-    GPIOPinConfigure(GPIO_PA1_U0TX);
-    // set PA0 and PA1 as type UART
-    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
-    // set UART0 base address, clock and baud rate
-    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
-                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
-    // configure interrupts
-    IntMasterEnable();
-    IntEnable(INT_UART0);
-    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
-    UARTIntRegister(UART0_BASE, UART0IntHandler);
 }
 
 void sendData(int yawAngle, int pitchAngle)
@@ -158,7 +142,6 @@ void sendData(int yawAngle, int pitchAngle)
         while(!UARTSpaceAvail(UART5_BASE))
         {
         }
-        UARTCharPut(UART0_BASE, putA[i]);
         UARTCharPut(UART5_BASE, putA[i++]);
     }
 }
@@ -243,22 +226,5 @@ int main()
 
         // Increase delay slightly to reduce sampling rate
         SysCtlDelay(SysCtlClockGet() / (100)); // Approximately 20ms delay
-    }
-}
-
-// handler when Tiva receives data from UART0
-void UART0IntHandler(void)
-{
-    // get interrupt status
-    uint32_t ui32Status = UARTIntStatus(UART0_BASE, true);
-    // clear the interrupt signal
-    UARTIntClear(UART0_BASE, ui32Status);
-    // receive data from UART0
-    while (UARTCharsAvail(UART0_BASE))
-    {
-        // forward the characters from UART0 to UART5 and back to UART0
-        char a = UARTCharGet(UART0_BASE);
-        UARTCharPut(UART5_BASE, a);
-        UARTCharPut(UART0_BASE, a);
     }
 }
