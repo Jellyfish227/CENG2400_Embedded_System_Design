@@ -8,6 +8,7 @@
 // slave, receive angular displacement, interrupt-driven
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include "inc/hw_memmap.h"
 #include "inc/hw_types.h"
 #include "inc/hw_gpio.h"
@@ -39,7 +40,7 @@ void UART5IntHandler(void);
 void UART0IntHandler(void);
 
 char charYaw[3], charPitch[3];
-int degreeArr[2];
+int degreeArr[3];
 int prevAngle[2];
 int processLock = 0;
 
@@ -150,12 +151,12 @@ int main()
         // pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
         // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
         // SysCtlDelay(SysCtlClockGet() / 3);
-        
+
         yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
         PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
         pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
         PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
-        // SysCtlDelay(SysCtlClockGet() / 500);
+        SysCtlDelay(SysCtlClockGet() / 1000);
     }
 }
 
@@ -179,26 +180,17 @@ void UART5IntHandler(void)
 {
     // get interrupt status
     uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
-    
-    uint32_t charCount = 0;
+
     // TODO: Test received data, design data receiving logic
-    char* chPtr = charYaw;
+    int idx = 0;
+
     // receive data from UART5
     while (UARTCharsAvail(UART5_BASE))
     {
         char b = UARTCharGet(UART5_BASE);
-        UARTCharPut(UART0_BASE, b);
-        if (b == ',') {
-            *chPtr = '\0'; // terminate the string
-            chPtr = charPitch;
-        }
-        else {
-            *chPtr++ = b;
-        }
+        degreeArr[idx] = b;
+        idx = (idx + 1) % 3;
     }
-    *chPtr = '\0'; // terminate the string
-    degreeArr[0] = atoi(charYaw);
-    degreeArr[1] = atoi(charPitch);
     // clear the interrupt signal
     UARTIntClear(UART5_BASE, ui32Status);
 }
