@@ -25,6 +25,7 @@
 
 float servo_pwm_freq = 50;
 volatile float pitch_angle, yaw_angle, pitch_duty_cycle, yaw_duty_cycle;
+int idx = 0;
 
 // determine the duty cycle according to the desired angle
 float angleToPWMDutyCycle(float angle)
@@ -182,14 +183,19 @@ void UART5IntHandler(void)
     uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
 
     // TODO: Test received data, design data receiving logic
-    int idx = 0;
-
+    int isPitch = 0;
     // receive data from UART5
     while (UARTCharsAvail(UART5_BASE))
     {
         char b = UARTCharGet(UART5_BASE);
-        degreeArr[idx] = b;
-        idx = (idx + 1) % 3;
+        degreeArr[0] = b;
+        break;
+    }
+    while (UARTCharsAvail(UART5_BASE))
+    {
+        char b = UARTCharGet(UART5_BASE);
+        degreeArr[1] = b;
+        break;
     }
     // clear the interrupt signal
     UARTIntClear(UART5_BASE, ui32Status);

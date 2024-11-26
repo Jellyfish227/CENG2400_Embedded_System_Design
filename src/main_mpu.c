@@ -31,7 +31,7 @@ tI2CMInstance g_sI2CMSimpleInst;
 float g_fYaw = 0.0f;                       // Yaw angle
 float g_fPitch = 0.0f;                     // Pitch angle
 float g_fDeltaTime = 0.01f;                // 10ms sample time
-float g_fComplementaryFilterCoeff = 0.5f; // Filter coefficient
+float g_fComplementaryFilterCoeff = 0.95f; // Filter coefficient
 
 void UART0IntHandler(void);
 
@@ -216,7 +216,7 @@ int main()
         g_fPitch = g_fComplementaryFilterCoeff * (g_fPitch + fGyro[0] * g_fDeltaTime) +
                    (1.0f - g_fComplementaryFilterCoeff) * fAccPitch * -1;
         g_fYaw = g_fComplementaryFilterCoeff * (g_fYaw + fGyro[1] * g_fDeltaTime) +
-                  (1.0f - g_fComplementaryFilterCoeff) * fAccYaw;
+                  (1.0f - g_fComplementaryFilterCoeff) * fAccYaw *30;
 
         // Normalize yaw to 0-180 degrees
         if (g_fYaw > 180.0f)
