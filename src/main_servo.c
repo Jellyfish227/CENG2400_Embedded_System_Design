@@ -8,7 +8,6 @@
 // slave, receive angular displacement, interrupt-driven
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include "inc/hw_memmap.h"
 #include "inc/hw_types.h"
 #include "inc/hw_gpio.h"
@@ -42,7 +41,8 @@ void UART0IntHandler(void);
 char charYaw[3], charPitch[3];
 int degreeArr[2];
 int prevAngle[2];
-int isFinished = 0;
+prevAngle[0] = 0;
+prevAngle[1] = 0;
 
 int main()
 {
@@ -125,9 +125,6 @@ int main()
     UARTCharPut(UART0_BASE, '!');
     UARTCharPut(UART0_BASE, '\n');
 
-    prevAngle[0] = 0;
-    prevAngle[1] = 0;
-
     while (true)
     {
         // yaw_angle = 0;
@@ -154,15 +151,15 @@ int main()
         // pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
         // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
         // SysCtlDelay(SysCtlClockGet() / 3);
-        if (isFinished) {
-            degreeArr[0] = atoi(charYaw);
-            degreeArr[1] = atoi(charPitch);
+        degreeArr[0] = atoi(charYaw);
+        degreeArr[1] = atoi(charPitch);
+        if (degreeArr[0] != prevAngle[0] || degreeArr[1] != prevAngle[1]) {
             yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
             pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
-//            prevAngle[0] = degreeArr[0];
-//            prevAngle[1] = degreeArr[1];
+            prevAngle[0] = degreeArr[0];
+            prevAngle[1] = degreeArr[1];
         }
     }
 }
@@ -189,7 +186,6 @@ void UART5IntHandler(void)
     uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
     // clear the interrupt signal
     UARTIntClear(UART5_BASE, ui32Status);
-    isFinished = 0;
 
     uint32_t charCount = 0;
     // TODO: Test received data, design data receiving logic
@@ -197,13 +193,11 @@ void UART5IntHandler(void)
     while (UARTCharsAvail(UART5_BASE))
     {
         char b = UARTCharGet(UART5_BASE);
-        UARTCharPut(UART0_BASE, b);
         if (charCount < 3) {
             charYaw[charCount] = b;
-        } else if (charCount > 3 && charCount < 6) {
+        } else if (charCount < 6) {
             charPitch[charCount - 3] = b;
         }
         charCount++;
     }
-    isFinished = 1;
 }
