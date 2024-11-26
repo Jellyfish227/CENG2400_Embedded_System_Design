@@ -127,7 +127,7 @@ int main()
 
     int isPitch = 0;
     int isValid = 0;
-    int idx = 0;
+    int idx = 1;
 
     while (true)
     {
@@ -137,26 +137,26 @@ int main()
             degreeArr[isPitch] = b;
             isPitch = !isPitch;
             idx++;
-            if (b == '/' && idx != 2) {
+            if (b == '/' && idx % 3 != 0) {
                 while (UARTCharsAvail(UART5_BASE)){
                     char check = UARTCharGet(UART5_BASE);
                     if (check == '/'){
                         break;
                     }
                 }
-                idx = 0;
+                idx = 1;
                 isPitch = 0;
                 continue;
-            } else if (idx == 2 && b == '/'){
+            } else if (idx % 3 == 0 && b == '/'){
                 isValid = 1;
-                idx = 0;
+                idx = 1;
                 break;
             }
         }
         if (isValid) {
             yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-            pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
+            pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1] % 90);
             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
         }
         SysCtlDelay(SysCtlClockGet() / 500);
