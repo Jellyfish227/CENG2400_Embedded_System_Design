@@ -125,38 +125,41 @@ int main()
     UARTCharPut(UART0_BASE, '!');
     UARTCharPut(UART0_BASE, '\n');
 
+    int isPitch = 0;
+    int isValid = 0;
+    int idx = 0;
+
     while (true)
     {
-        // yaw_angle = 0;
-        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
-        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-        // SysCtlDelay(SysCtlClockGet() / 3);
-        // yaw_angle = 90;
-        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
-        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-        // SysCtlDelay(SysCtlClockGet() / 3);
-        // yaw_angle = 180;
-        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
-        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-        // SysCtlDelay(SysCtlClockGet() / 3);
-        // yaw_angle = 90;
-        // yaw_duty_cycle = angleToPWMDutyCycle(yaw_angle);
-        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-        // SysCtlDelay(SysCtlClockGet() / 3);
-        // pitch_angle = 60;
-        // pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
-        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
-        // SysCtlDelay(SysCtlClockGet() / 3);
-        // pitch_angle = 90;
-        // pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
-        // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
-        // SysCtlDelay(SysCtlClockGet() / 3);
-
-        yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-        pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
-        SysCtlDelay(SysCtlClockGet() / 1000);
+        while (UARTCharsAvail(UART5_BASE))
+        {
+            char b = UARTCharGet(UART5_BASE);
+            degreeArr[isPitch] = b;
+            isPitch = !isPitch;
+            idx++;
+            if (b == '/' && idx != 2) {
+                while (UARTCharsAvail(UART5_BASE)){
+                    char check = UARTCharGet(UART5_BASE);
+                    if (check == '/'){
+                        break;
+                    }
+                }
+                idx = 0;
+                isPitch = 0;
+                continue;
+            } else if (idx == 2 && b == '/'){
+                isValid = 1;
+                idx = 0;
+                break;
+            }
+        }
+        if (isValid) {
+            yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
+            PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+            pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
+            PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+        }
+        SysCtlDelay(SysCtlClockGet() / 500);
     }
 }
 
@@ -181,16 +184,16 @@ void UART5IntHandler(void)
     // get interrupt status
     uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
 
-    // TODO: Test received data, design data receiving logic
-    int idx = 0;
+    // // TODO: Test received data, design data receiving logic
+    // int idx = 0;
 
-    // receive data from UART5
-    while (UARTCharsAvail(UART5_BASE))
-    {
-        char b = UARTCharGet(UART5_BASE);
-        degreeArr[idx] = b;
-        idx = (idx + 1) % 3;
-    }
+    // // receive data from UART5
+    // while (UARTCharsAvail(UART5_BASE))
+    // {
+    //     char b = UARTCharGet(UART5_BASE);
+    //     degreeArr[idx] = b;
+    //     idx = (idx + 1) % 3;
+    // }
     // clear the interrupt signal
     UARTIntClear(UART5_BASE, ui32Status);
 }
