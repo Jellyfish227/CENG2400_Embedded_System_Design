@@ -46,12 +46,11 @@ int g_filterIndex = 0;
 //
 void MPU6050Callback(void *pvCallbackData, uint_fast8_t ui8Status)
 {
-    // See if an error occurred.
     if (ui8Status != I2CM_STATUS_SUCCESS)
     {
+        // Handle error condition
+        return;
     }
-
-    // Indicate that the MPU6050 transaction has completed.
     g_bMPU6050Done = true;
 }
 
@@ -131,21 +130,25 @@ void InitUART(void)
 
 void sendData(float yawAngle, float pitchAngle)
 {
-    char data[7]; // Buffer for formatted string
+    char data[8]; // Increased buffer size for safety
 
-    // Format the angles as a string with 10 decimal places
-    // Format: "yaw,pitch" (e.g., "123.4567,89.1234")
-    sprintf(data, "%03d%03d\0", (int)yawAngle, (int)pitchAngle);
-
-    // Send each character of the string through UART
-    char *chp = data;
-    while (*chp)
+    // Add error checking
+    while(!UARTSpaceAvail(UART5_BASE))
     {
-        UARTCharPut(UART5_BASE, *chp++);
     }
 
-    // Send newline character to mark end of transmission
-    UARTCharPut(UART5_BASE, '\n');
+    // Use snprintf to format the data with 3 decimal places
+    snprintf(data, sizeof(data), "%03.0f,%03.0f",
+             roundf(yawAngle), roundf(pitchAngle));
+    
+    char *chp = data;
+    while(*chp)
+    {
+        while(!UARTSpaceAvail(UART5_BASE))
+        {
+        }
+        UARTCharPut(UART5_BASE, *chp++);
+    }
 }
 
 float applyDeadZone(float value, float threshold) 
@@ -156,17 +159,15 @@ float applyDeadZone(float value, float threshold)
     return value;
 }
 
-float movingAverage(float newValue, float* history) 
+float applyMovingAverage(float newValue, float history[], int *index) 
 {
-    // Add new value to history
-    history[g_filterIndex] = newValue;
+    history[*index] = newValue;
+    *index = (*index + 1) % FILTER_WINDOW_SIZE;
     
-    // Calculate average
-    float sum = 0;
+    float sum = 0.0f;
     for(int i = 0; i < FILTER_WINDOW_SIZE; i++) {
         sum += history[i];
     }
-    
     return sum / FILTER_WINDOW_SIZE;
 }
 
@@ -261,6 +262,15 @@ int main()
         else if (g_fPitch < 30.0f)
         {
             g_fPitch = 30.0f;
+        }
+
+        // Apply moving average filter
+        g_fYaw = applyMovingAverage(g_fYaw, g_yawHistory, &g_filterIndex);
+        g_fPitch = applyMovingAverage(g_fPitch, g_pitchHistory, &g_filterIndex);
+
+        // More aggressive deadzone for better stability
+        if (fabs(fGyro[2]) < GYRO_DEADZONE * 2.0f) {
+            fGyro[2] = 0.0f;
         }
 
         // Send the computed angles to the servo controller

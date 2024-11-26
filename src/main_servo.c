@@ -41,8 +41,7 @@ void UART0IntHandler(void);
 char charYaw[3], charPitch[3];
 int degreeArr[2];
 int prevAngle[2];
-prevAngle[0] = 0;
-prevAngle[1] = 0;
+int processLock = 0;
 
 int main()
 {
@@ -79,7 +78,7 @@ int main()
     GPIOPinTypeUART(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
     // set UART5 base address, clock and baud rate
     UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
-    (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
 
     // register interrupt handler for UART5
     UARTIntRegister(UART5_BASE, UART5IntHandler);
@@ -151,16 +150,12 @@ int main()
         // pitch_duty_cycle = angleToPWMDutyCycle(pitch_angle);
         // PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
         // SysCtlDelay(SysCtlClockGet() / 3);
-        degreeArr[0] = atoi(charYaw);
-        degreeArr[1] = atoi(charPitch);
-        if (degreeArr[0] != prevAngle[0] || degreeArr[1] != prevAngle[1]) {
-            yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
-            PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-            pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
-            PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
-            prevAngle[0] = degreeArr[0];
-            prevAngle[1] = degreeArr[1];
-        }
+        
+        yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+        // SysCtlDelay(SysCtlClockGet() / 500);
     }
 }
 
@@ -184,20 +179,26 @@ void UART5IntHandler(void)
 {
     // get interrupt status
     uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
-    // clear the interrupt signal
-    UARTIntClear(UART5_BASE, ui32Status);
-
+    
     uint32_t charCount = 0;
     // TODO: Test received data, design data receiving logic
+    char* chPtr = charYaw;
     // receive data from UART5
     while (UARTCharsAvail(UART5_BASE))
     {
         char b = UARTCharGet(UART5_BASE);
-        if (charCount < 3) {
-            charYaw[charCount] = b;
-        } else if (charCount < 6) {
-            charPitch[charCount - 3] = b;
+        UARTCharPut(UART0_BASE, b);
+        if (b == ',') {
+            *chPtr = '\0'; // terminate the string
+            chPtr = charPitch;
         }
-        charCount++;
+        else {
+            *chPtr++ = b;
+        }
     }
+    *chPtr = '\0'; // terminate the string
+    degreeArr[0] = atoi(charYaw);
+    degreeArr[1] = atoi(charPitch);
+    // clear the interrupt signal
+    UARTIntClear(UART5_BASE, ui32Status);
 }
