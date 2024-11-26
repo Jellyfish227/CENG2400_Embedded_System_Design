@@ -151,26 +151,6 @@ void sendData(float yawAngle, float pitchAngle)
     }
 }
 
-float applyDeadZone(float value, float threshold) 
-{
-    if (fabs(value) < threshold) {
-        return 0.0f;
-    }
-    return value;
-}
-
-float applyMovingAverage(float newValue, float history[], int *index) 
-{
-    history[*index] = newValue;
-    *index = (*index + 1) % FILTER_WINDOW_SIZE;
-    
-    float sum = 0.0f;
-    for(int i = 0; i < FILTER_WINDOW_SIZE; i++) {
-        sum += history[i];
-    }
-    return sum / FILTER_WINDOW_SIZE;
-}
-
 int main()
 {
     // Set the system clock to use the PLL with a 16 MHz crystal oscillator.
@@ -231,18 +211,6 @@ int main()
                    (1.0f - g_fComplementaryFilterCoeff) * fAccPitch + 30;
         g_fRoll = g_fComplementaryFilterCoeff * (g_fRoll + fGyro[1] * g_fDeltaTime) +
                   (1.0f - g_fComplementaryFilterCoeff) * fAccRoll;
-        
-        // Calculate yaw with reduced sensitivity
-        if (fabs(fGyro[2]) > GYRO_DEADZONE) {
-            g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime) / 4.0f;  // Reduced sensitivity
-        }
-
-        // Apply moving average filter
-        g_fYaw = movingAverage(g_fYaw, g_yawHistory);
-        g_fPitch = movingAverage(g_fPitch, g_pitchHistory);
-
-        // Update filter index
-        g_filterIndex = (g_filterIndex + 1) % FILTER_WINDOW_SIZE;
 
         // Normalize yaw to 0-180 degrees
         if (g_fYaw > 180.0f)
@@ -262,15 +230,6 @@ int main()
         else if (g_fPitch < 30.0f)
         {
             g_fPitch = 30.0f;
-        }
-
-        // Apply moving average filter
-        g_fYaw = applyMovingAverage(g_fYaw, g_yawHistory, &g_filterIndex);
-        g_fPitch = applyMovingAverage(g_fPitch, g_pitchHistory, &g_filterIndex);
-
-        // More aggressive deadzone for better stability
-        if (fabs(fGyro[2]) < GYRO_DEADZONE * 2.0f) {
-            fGyro[2] = 0.0f;
         }
 
         // Send the computed angles to the servo controller
