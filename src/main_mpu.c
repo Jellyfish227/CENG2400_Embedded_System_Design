@@ -34,10 +34,6 @@ float g_fRoll = 0.0f;                      // Roll angle
 float g_fDeltaTime = 0.01f;                // 10ms sample time
 float g_fComplementaryFilterCoeff = 0.5f; // Filter coefficient
 
-float g_yawHistory[FILTER_WINDOW_SIZE] = {0};
-float g_pitchHistory[FILTER_WINDOW_SIZE] = {0};
-int g_filterIndex = 0;
-
 // todo: add reset button for angle reset
 
 //
@@ -128,7 +124,7 @@ void InitUART(void)
                          UART_CONFIG_PAR_NONE));
 }
 
-void sendData(float yawAngle, float pitchAngle)
+void sendData(int yawAngle, int pitchAngle)
 {
     char data[8]; // Increased buffer size for safety
 
@@ -136,18 +132,18 @@ void sendData(float yawAngle, float pitchAngle)
     while(!UARTSpaceAvail(UART5_BASE))
     {
     }
+    int putA[2];
+    putA[0] = yawAngle;
+    putA[1] = pitchAngle;
 
     // Use snprintf to format the data with 3 decimal places
-    snprintf(data, sizeof(data), "%03.0f,%03.0f",
-             roundf(yawAngle), roundf(pitchAngle));
-    
-    char *chp = data;
-    while(*chp)
+    int i = 0;
+    while(i < 2)
     {
         while(!UARTSpaceAvail(UART5_BASE))
         {
         }
-        UARTCharPut(UART5_BASE, *chp++);
+        UARTCharPut(UART5_BASE, putA[i++]);
     }
 }
 
@@ -195,12 +191,6 @@ int main()
         // Get accelerometer and gyroscope data
         MPU6050DataAccelGetFloat(&sMPU6050, &fAccel[0], &fAccel[1], &fAccel[2]);
         MPU6050DataGyroGetFloat(&sMPU6050, &fGyro[0], &fGyro[1], &fGyro[2]);
-
-        // Apply dead zone to reduce noise
-        for(int i = 0; i < 3; i++) {
-            fGyro[i] = applyDeadZone(fGyro[i], GYRO_DEADZONE);
-            fAccel[i] = applyDeadZone(fAccel[i], ACCEL_DEADZONE);
-        }
 
         // Calculate angles from accelerometer
         float fAccPitch, fAccRoll;
