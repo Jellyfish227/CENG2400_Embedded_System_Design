@@ -30,7 +30,6 @@ tI2CMInstance g_sI2CMSimpleInst;
 
 float g_fYaw = 0.0f;                       // Yaw angle
 float g_fPitch = 0.0f;                     // Pitch angle
-float g_fRoll = 0.0f;                      // Roll angle
 float g_fDeltaTime = 0.01f;                // 10ms sample time
 float g_fComplementaryFilterCoeff = 0.5f; // Filter coefficient
 
@@ -100,10 +99,10 @@ void Initialization(void)
     }
 }
 
-void computeAnglesFromAccel(float fAccel[3], float *pfPitch, float *pfRoll)
+void computeAnglesFromAccel(float fAccel[3], float *pfPitch, float *pfYaw)
 {
     // Convert accelerometer values to angles
-    *pfRoll = atan2f(fAccel[1], fAccel[2]) * 180.0f / M_PI;
+    *pfYaw = atan2f(fAccel[1], fAccel[2]) * 180.0f / M_PI;
     *pfPitch = atan2f(-fAccel[0], sqrtf(fAccel[1] * fAccel[1] + fAccel[2] * fAccel[2])) * 180.0f / M_PI;
 }
 
@@ -126,7 +125,6 @@ void InitUART(void)
 
 void sendData(int yawAngle, int pitchAngle)
 {
-    char data[8]; // Increased buffer size for safety
 
     // Add error checking
     while(!UARTSpaceAvail(UART5_BASE))
@@ -193,14 +191,14 @@ int main()
         MPU6050DataGyroGetFloat(&sMPU6050, &fGyro[0], &fGyro[1], &fGyro[2]);
 
         // Calculate angles from accelerometer
-        float fAccPitch, fAccRoll;
-        computeAnglesFromAccel(fAccel, &fAccPitch, &fAccRoll);
+        float fAccPitch, fAccYaw;
+        computeAnglesFromAccel(fAccel, &fAccPitch, &fAccYaw);
 
         // Complementary filter with reduced gyro influence when stationary
         g_fPitch = g_fComplementaryFilterCoeff * (g_fPitch + fGyro[0] * g_fDeltaTime) +
-                   (1.0f - g_fComplementaryFilterCoeff) * fAccPitch + 30;
-        g_fRoll = g_fComplementaryFilterCoeff * (g_fRoll + fGyro[1] * g_fDeltaTime) +
-                  (1.0f - g_fComplementaryFilterCoeff) * fAccRoll;
+                   (1.0f - g_fComplementaryFilterCoeff) * fAccPitch * -1;
+        g_fYaw = g_fComplementaryFilterCoeff * (g_fYaw + fGyro[1] * g_fDeltaTime) +
+                  (1.0f - g_fComplementaryFilterCoeff) * fAccYaw;
 
         // Normalize yaw to 0-180 degrees
         if (g_fYaw > 180.0f)
@@ -226,6 +224,6 @@ int main()
         sendData(g_fYaw, g_fPitch);
 
         // Increase delay slightly to reduce sampling rate
-        SysCtlDelay(SysCtlClockGet() / (3 * 50)); // Approximately 20ms delay
+        SysCtlDelay(SysCtlClockGet() / (100)); // Approximately 20ms delay
     }
 }
