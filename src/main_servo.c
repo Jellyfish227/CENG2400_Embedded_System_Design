@@ -36,12 +36,18 @@ float angleToPWMDutyCycle(float angle)
     return (angle / 90 + 0.5) / (1000 / servo_pwm_freq);
 }
 
-void UART5IntHandler(void);
-void UART0IntHandler(void);
+char const START_INDICATOR = 254;
+char const END_INDICATOR = 255;
 
-char charYaw[3], charPitch[3];
-int degreeArr[3];
-int prevAngle[2];
+void clearArray(int arr[4]) {
+    int i = 0;
+    while (i < 4) {
+        arr[i] = 0;
+        i++;
+    }
+}
+
+int receiveArr[4];
 int processLock = 0;
 
 int main()
@@ -81,119 +87,48 @@ int main()
     UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
                         (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
 
-    // register interrupt handler for UART5
-    UARTIntRegister(UART5_BASE, UART5IntHandler);
-    // enable interrupt for UART5
-    UARTIntEnable(UART5_BASE, UART_INT_RX | UART_INT_RT);
-    // enable interrupt for UART5
-    IntEnable(INT_UART5);
-
-    // enable UART0 and GPIOA to communicate with PC
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
-    // configure PA0 for RX, PA1 for TX
-    GPIOPinConfigure(GPIO_PA0_U0RX);
-    GPIOPinConfigure(GPIO_PA1_U0TX);
-    // set PA0 and PA1 as type UART
-    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
-    // set UART0 base address, clock and baud rate
-    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
-                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
-    IntEnable(INT_UART0);
-    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
-    UARTIntRegister(UART0_BASE, UART0IntHandler);
-    // enable interrupt master control
-    IntMasterEnable();
-
-    // UART0 connection indicator
-    // UART0 connected if the serial monitor displays `UART0 connected!`
-    UARTCharPut(UART0_BASE, 'U');
-    UARTCharPut(UART0_BASE, 'A');
-    UARTCharPut(UART0_BASE, 'R');
-    UARTCharPut(UART0_BASE, 'T');
-    UARTCharPut(UART0_BASE, '0');
-    UARTCharPut(UART0_BASE, ' ');
-    UARTCharPut(UART0_BASE, 'C');
-    UARTCharPut(UART0_BASE, 'o');
-    UARTCharPut(UART0_BASE, 'n');
-    UARTCharPut(UART0_BASE, 'n');
-    UARTCharPut(UART0_BASE, 'e');
-    UARTCharPut(UART0_BASE, 'c');
-    UARTCharPut(UART0_BASE, 't');
-    UARTCharPut(UART0_BASE, 'e');
-    UARTCharPut(UART0_BASE, 'd');
-    UARTCharPut(UART0_BASE, '!');
-    UARTCharPut(UART0_BASE, '\n');
-
-    int isPitch = 0;
     int isValid = 0;
-    int idx = 1;
+    int idx = 0;
+    char b = '\0';
 
     while (true)
     {
-        while (UARTCharsAvail(UART5_BASE))
+        // empty receive buffer
+        clearArray(receiveArr);
+
+        // receive data to buffer
+        idx = 0;
+        while (UARTCharsAvail(UART5_BASE) || b != END_INDICATOR)
         {
-            char b = UARTCharGet(UART5_BASE);
-            degreeArr[isPitch] = b;
-            isPitch = !isPitch;
-            idx++;
-            if (b == '/' && idx % 3 != 0) {
-                while (UARTCharsAvail(UART5_BASE)){
-                    char check = UARTCharGet(UART5_BASE);
-                    if (check == '/'){
-                        break;
-                    }
+            b = UARTCharGet(UART5_BASE);
+        set:
+            receiveArr[idx] = b;
+            idx = (idx + 1) % 4;
+        }
+
+        // check data validity
+        if (receiveArr[0] == START_INDICATOR && receiveArr[3] == END_INDICATOR) {
+            isValid = 1;
+        } else {
+            while (UARTCharsAvail(UART5_BASE))
+            {
+                char temp = UARTCharGet(UART5_BASE);
+                if (temp == START_INDICATOR) {
+                    idx = 0;
+                    clearArray(receiveArr);
+                    goto set;
                 }
-                idx = 1;
-                isPitch = 0;
-                continue;
-            } else if (idx % 3 == 0 && b == '/'){
-                isValid = 1;
-                idx = 1;
-                break;
             }
         }
+
+        // write to servo if valid
         if (isValid) {
-            yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
+            yaw_duty_cycle = angleToPWMDutyCycle(receiveArr[1]);
             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-            pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1] % 90);
+            pitch_duty_cycle = angleToPWMDutyCycle(receiveArr[2] % 90);
             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+            isValid = 0;    // reset valid state
         }
         SysCtlDelay(SysCtlClockGet() / 500);
     }
-}
-
-// handler when Tiva receives data from UART0
-void UART0IntHandler(void)
-{
-    // get interrupt status
-    uint32_t ui32Status = UARTIntStatus(UART0_BASE, true);
-    // clear the interrupt signal
-    UARTIntClear(UART0_BASE, ui32Status);
-    // receive data from UART0
-    while (UARTCharsAvail(UART0_BASE))
-    {
-        // forward the characters from UART0 to UART5 and back to UART0
-        char a = UARTCharGet(UART0_BASE);
-        UARTCharPut(UART0_BASE, a);
-    }
-}
-
-void UART5IntHandler(void)
-{
-    // get interrupt status
-    uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
-
-    // // TODO: Test received data, design data receiving logic
-    // int idx = 0;
-
-    // // receive data from UART5
-    // while (UARTCharsAvail(UART5_BASE))
-    // {
-    //     char b = UARTCharGet(UART5_BASE);
-    //     degreeArr[idx] = b;
-    //     idx = (idx + 1) % 3;
-    // }
-    // clear the interrupt signal
-    UARTIntClear(UART5_BASE, ui32Status);
 }
