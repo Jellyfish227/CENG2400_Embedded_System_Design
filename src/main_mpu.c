@@ -193,7 +193,7 @@ int main()
         // Complementary filter with reduced gyro influence when stationary
         g_fPitch = g_fComplementaryFilterCoeff * (g_fPitch + fGyro[0] * g_fDeltaTime) +
                    (1.0f - g_fComplementaryFilterCoeff) * fAccPitch * -1;
-        g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime) / 2;
+        g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime) / 2 * 0.5;
 
         // Normalize yaw to 0-180 degrees
         if (g_fYaw > 180.0f)
