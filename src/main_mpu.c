@@ -28,12 +28,13 @@ volatile bool g_bMPU6050Done;
 tMPU6050 sMPU6050;
 tI2CMInstance g_sI2CMSimpleInst;
 
-float g_fYaw = 0.0f;                       // Yaw angle
-float g_fPitch = 0.0f;                     // Pitch angle
-float g_fDeltaTime = 0.01f;                // 10ms sample time
+float g_fYaw = 0.0f;                      // Yaw angle
+float g_fPitch = 0.0f;                    // Pitch angle
+float g_fDeltaTime = 0.01f;               // 10ms sample time
 float g_fComplementaryFilterCoeff = 0.5f; // Filter coefficient
 
-void UART0IntHandler(void);
+char const START_INDICATOR = 254;
+char const END_INDICATOR = 255;
 
 //
 // The function that is provided by this example as a callback when MPU6050
@@ -105,13 +106,6 @@ void Initialization(void)
     }
 }
 
-//void computeAnglesFromAccel(float fAccel[3], float *pfPitch, float *pfYaw)
-//{
-//    // Convert accelerometer values to angles
-//    *pfYaw = atan2f(fAccel[1], fAccel[2]) * 180.0f / M_PI;
-//    *pfPitch = atan2f(-fAccel[0], sqrtf(fAccel[1] * fAccel[1] + fAccel[2] * fAccel[2])) * 180.0f / M_PI;
-//}
-
 void InitUART(void)
 {
     // Enable UART5 and PORTE peripherals
@@ -127,29 +121,24 @@ void InitUART(void)
     UARTConfigSetExpClk(UART5_BASE, SysCtlClockGet(), 38400,
                         (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
                          UART_CONFIG_PAR_NONE));
-
 }
 
 void sendData(int yawAngle, int pitchAngle)
 {
-
-    // Add error checking
-    while(!UARTSpaceAvail(UART5_BASE))
-    {
-    }
     int putA[2];
     putA[0] = yawAngle;
     putA[1] = pitchAngle;
 
-    // Use snprintf to format the data with 3 decimal places
+    while (!UARTSpaceAvail(UART5_BASE));
+    UARTCharPut(UART5_BASE, START_INDICATOR);
     int i = 0;
-    while(i < 2)
+    while (i < 2)
     {
-        while(!UARTSpaceAvail(UART5_BASE))
-        {
-        }
+        while (!UARTSpaceAvail(UART5_BASE));
         UARTCharPut(UART5_BASE, putA[i++]);
     }
+    while (!UARTSpaceAvail(UART5_BASE));
+    UARTCharPut(UART5_BASE, END_INDICATOR);
 }
 
 int main()
@@ -199,12 +188,12 @@ int main()
 
         // Calculate angles from accelerometer
         float fAccPitch;
-       computeAnglesFromAccel(fAccel, &fAccPitch);
+        computeAnglesFromAccel(fAccel, &fAccPitch);
 
         // Complementary filter with reduced gyro influence when stationary
         g_fPitch = g_fComplementaryFilterCoeff * (g_fPitch + fGyro[0] * g_fDeltaTime) +
-                          (1.0f - g_fComplementaryFilterCoeff) * fAccPitch * -1;
-        g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime) / 2 ;
+                   (1.0f - g_fComplementaryFilterCoeff) * fAccPitch * -1;
+        g_fYaw += 180.0f * (fGyro[2] * g_fDeltaTime) / 2;
 
         // Normalize yaw to 0-180 degrees
         if (g_fYaw > 180.0f)
@@ -221,9 +210,9 @@ int main()
         {
             g_fPitch = 90.0f;
         }
-        else if (g_fPitch < 30.0f)
+        else if (g_fPitch < 10.0f)
         {
-            g_fPitch = 30.0f;
+            g_fPitch = 10.0f;
         }
 
         // Send the computed angles to the servo controller
