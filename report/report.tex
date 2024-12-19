@@ -69,10 +69,10 @@
 		\vspace{20pt}
         \textit{Also thank you for the help provided by teaching assistants}\\
 		\textbf{\large 
-        Mr. Chenchen ZHAO\\
-        Mr. Kezhi LI\\
-        Mr. Han ZHAO\\
-        Mr. Zhirui ZHANG\\
+            Mr. Chenchen ZHAO\\
+            Mr. Kezhi LI\\
+            Mr. Han ZHAO\\
+            Mr. Zhirui ZHANG\\
         }
 		
 	\end{center}
@@ -97,17 +97,17 @@ This report outlines our challenges faced and insights gained during implementat
     \hline
     \textbf{Task} & \textbf{Person In Charge} \\
     \hline\hline
-    \textbf{Master End} & \textbf{Yu Ching Hei, Tam Yiu Hei, Leung Chung Wang} \\
+    \textbf{Master End} & Yu Ching Hei, Tam Yiu Hei, Leung Chung Wang \\
     \hline
-    \textbf{Slave End} & \textbf{Yu Ching Hei, Tam Yiu Hei} \\
+    \textbf{Slave End} & Yu Ching Hei, Tam Yiu Hei \\
     \hline
-    \textbf{Report} & \textbf{Yu Ching Hei, Tam Yiu Hei, Leung Chung Wang} \\
+    \textbf{Report} & Yu Ching Hei, Tam Yiu Hei, Leung Chung Wang \\
     \hline
 \end{tabularx}
 
 \section{Chanllenges during implementation}
 \subsection{Transmission of Data}
-\subsubsection{Master end: First edition of data transmission formatting}\text{}
+\subsubsection{v1 of data sending formatting(float string)}\text{}
 \begin{code}
 /* Commit hash: c6e8ed6, main_mpu.c*/
 void sendData(float yawAngle, float pitchAngle) {
@@ -125,7 +125,7 @@ the long string to be sent over UART wirelessly increases the risk of data loss.
 we found that the data received was very unstable, we have presumed that the problem is due to the data being sent is too long, 
 which means there are more characters that can potentially be lost, and just one character lost can cause the whole data to be corrupted.
 
-\subsubsection{Master end: Second edition of data transmission formatting}\text{}
+\subsubsection{v2 of data sending formatting(int string)}\text{}
 \begin{code}
 /* Commit hash: af09000, main_mpu.c */
 void sendData(float yawAngle, float pitchAngle) {
@@ -150,7 +150,7 @@ we noticed that sometimes the data received would swap their positions(i.e. the 
 or sometimes some digits that should be in the pitch angle would appears in the array of yaw angle characters received.
 Therefore, we started to investigate in the slave end.
 
-\subsubsection{Slave end: wrongly assumed the problem is during data unpacking}\text{}
+\subsubsection{Slave end: try modifying data unpacking timing}\text{}
 \begin{code}
 /* Commit hash: 7f6934b, main_servo.c */
 void UART5IntHandler(void) {
@@ -180,88 +180,99 @@ so we assumed it is the problem to translate it separately in other loop, so we 
 into the interrupt handler, and we found that the integral data was still incorrect, 
 which means that the wrong data was not due to the conversion process but the character receiving process instead.
 
-\subsubsection{Slave end: investigating receive logic by locking or raising flags}\text{}
+\subsubsection{Slave end: try raising flag after finished receiving}\text{}
 \begin{code}
-/* Commit hash: , main_servo.c */
+/* Commit hash: 2f0f60e, main_servo.c */
+/* in the main while loop */
+while (true) {
+    if (isFinished) {
+        degreeArr[0] = atoi(charYaw);
+        degreeArr[1] = atoi(charPitch);
+        yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+    }
+}
+
+/* other code in the middle */
+
 void UART5IntHandler(void) {
     uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
     UARTIntClear(UART5_BASE, ui32Status);
-    isFinished = 0; // Reset flag
-
+    isFinished = 0;
     uint32_t charCount = 0;
-    if (processLock) {
-        char b = UARTCharGet(UART5_BASE);
-        charCount++;
-    }
+    /* same while loop as before */
     isFinished = 1;
-    processLock = 0; // Release lock
 }
 \end{code}\text{}\\
-In this attempt, we introduced a locking mechanism to handle data reception more effectively. 
-This approach aimed to prevent data loss by ensuring that the system only processed one set of data 
-at a time. However, we still faced issues with data integrity, especially when the UART buffer was 
-filled with new incoming data before the previous data was fully processed.
+In this attempt, we added a flag called \texttt{isFinished} to indicate the end of the data receiving process. 
+And theoretically, the instructions that write the angle to the servo motors are only executed when \texttt{isFinished} is true.
+However, we found that the data received was still unstable, and the servo motors were still having weird movements.
+Starting from this attempt, we are investigating a new way to transfer data, which could be more stable. 
 
-\subsubsection{Slave end: use polling to receive data instead of interrupt}\text{}
+\subsubsection{v3 of data sending formatting(ascii encoding)}\text{}
 \begin{code}
-/* Commit hash: , main_mpu.c */ //FIXME: wrong code included
+/* Commit hash: 5a403e6, main_mpu.c */
 void sendData(int yawAngle, int pitchAngle) {
-    char data[8]; // Increased buffer size for safety
-    while (!UARTSpaceAvail(UART5_BASE)) {}
-    snprintf(data, sizeof(data), "%03.0f,%03.0f", roundf(yawAngle), roundf(pitchAngle));
-    char *chp = data;
-    while (*chp) {
-        UARTCharPut(UART5_BASE, *chp++);
+    int putA[2];
+    putA[0] = yawAngle;
+    putA[1] = pitchAngle;
+    int i = 0;
+    while(i < 2) {
+        while(!UARTSpaceAvail(UART5_BASE)) {}
+        UARTCharPut(UART5_BASE, putA[i++]);
     }
-    UARTCharPut(UART5_BASE, '/'); // End of data
 }
 \end{code}\text{}\\
-We decided to use a polling mechanism instead of relying on interrupts to avoid data integrity issues. 
-By sending the yaw and pitch angles as ASCII characters followed by a delimiter (/), 
-we aimed to ensure that each data packet was correctly terminated. 
-However, ensuring that no data was lost during transmission remained a challenge.
+After previous attempts, we decided to choose a new way to send data, which could minimize the steps for encoding and decoding the trasmitting data.
+Inspired by the mechanism of C language handling characters as a 1-byte integer, we know that a character can represent a number from 0 to 255.
+Which our angle data is 0$^\circ$-180$^\circ$ for yaw and 15$^\circ$-90$^\circ$ for pitch, which is well within the range of a character.
+Therefore, we can send the yaw and pitch angles as two characters, which is a lot more concise and atomic to handle during the transmission.
+Moreover, we no longer need to do extra steps to encode and decode the data, which reduces the overhead of both the master and slave ends.
+After implementing this version, the data received was much more stable, and the servo motors were able to move to the correct positions most of the time.
+\\However, we found that the data received was still not 100\% stable, and the servo motors would sometimes flick even if the mpu was not moved.
+We noticed that it may have received the tilt data as the yaw angle, since the minimum tilt angle to send is 20$^\circ$
 
-\subsubsection{Slave end: data integrity checking}\text{}
+\subsubsection{Data integrity checking}\text{}
 \begin{code}
-/* Commit hash: , main_servo.c */
-while (true) {
+/* Commit hash: ceb7c95, main_servo.c */
+/* In the main while loop*/
+idx = 0;
+while (UARTCharsAvail(UART5_BASE) || b != END_INDICATOR) {
+    b = UARTCharGet(UART5_BASE);
+set:
+    receiveArr[idx] = b;
+    idx = (idx + 1) % 4;
+}
+// check data validity
+if (receiveArr[0] == START_INDICATOR && receiveArr[3] == END_INDICATOR)
+    isValid = 1;
+else {
     while (UARTCharsAvail(UART5_BASE)) {
-        char b = UARTCharGet(UART5_BASE);
-        degreeArr[isPitch] = b;
-        isPitch = !isPitch;
-        idx++;
-        if (b == '/' && idx % 3 != 0) {
-            // Logic to ensure data is valid
+        char temp = UARTCharGet(UART5_BASE);
+        if (temp == START_INDICATOR) {
+            idx = 0;
+            clearArray(receiveArr);
+            goto set;
         }
     }
 }
-\end{code}\text{}\\
-In this code, we implemented checks to verify the integrity of received data. 
-We ensured that only complete and correctly formatted data packets were processed by checking for start and end indicators. 
-However, we still faced challenges in ensuring that the data received from the MPU6050 sensor was not corrupted by noise, 
-often leading to missed or incorrect angle readings.
-
-\subsubsection{Final adjustment}\text{}
-\begin{code}
-/* Commit hash: , main_mpu.c */
-char const START_INDICATOR = 254;
-char const END_INDICATOR = 255;
-void sendData(int yawAngle, int pitchAngle) {
-    while (!UARTSpaceAvail(UART5_BASE)) {}
-    UARTCharPut(UART5_BASE, START_INDICATOR);
-    UARTCharPut(UART5_BASE, (yawAngle >> 8) & 0xFF);
-    UARTCharPut(UART5_BASE, yawAngle & 0xFF);
-    UARTCharPut(UART5_BASE, (pitchAngle >> 8) & 0xFF);
-    UARTCharPut(UART5_BASE, pitchAngle & 0xFF);
-    while (!UARTSpaceAvail(UART5_BASE)) {
-        UARTCharPut(UART5_BASE, END_INDICATOR);
-    }
+if (isValid) {
+    /* write data to servo motors */
 }
-\end{code}\text{}\\
-In the final adjustments, we emphasized starting and ending indicators for each data transmission. 
-By sending the yaw and pitch angles as separate bytes, we improved the clarity of the data being transmitted. 
-This method aimed to reduce confusion and ensure that the receiving end could accurately reconstruct the angles. 
-Through this iterative process, we learned the importance of robust error handling and effective communication strategies in embedded systems.
+\end{code}
+\text{}\\
+In this part, we aimed to ensure that each data packet has a clear start and terminate with an indicator.
+Therefore we added two constants in the beginning of both ends, 
+\begin{verbatim}
+    char const START_INDICATOR = 254;
+    char const END_INDICATOR = 255;
+\end{verbatim}
+Which these two indicators are not going to be messed up with the data since the range is 0$^\circ$-180$^\circ$ for yaw and 15$^\circ$-90$^\circ$ for pitch.
+In the slave checking logic, we are not terminating the data receiving process until we receive the \texttt{END\_INDICATOR} and all data received, 
+then we check if both the start and end indicators are correct, if not, we will wait until the next \texttt{START\_INDICATOR} to restart the data 
+receiving process by jumping back to the loop. The data will only be written to the servo motors when the data is valid.
 
 \subsection{MPU Connection}
 \text{}\\
@@ -269,29 +280,23 @@ In our project, we faced challenges due to noise interference in receiving data 
 The flag g$\_$bMPU6050Done is used to indicate when the sensor has been successfully initialized, 
 but due to noise, this flag often failed to be set, causing the system to hang indefinitely. 
 \begin{code}
-/* Commit hash: , main_mpu.c */
+/* Commit hash: effa073, main_mpu.c */
 g_bMPU6050Done = false;
 MPU6050Init(&sMPU6050, &g_sI2CMSimpleInst, 0x68, MPU6050Callback, &sMPU6050);
 while (!g_bMPU6050Done) {
     // Waiting for initialization to complete
 }
 \end{code}\text{}\\
-On the above code, the while loop waits for g$\_$bMPU6050Done to turn true. 
-However, due to noise, this flag might never be set, leading to a situation where the system appears unresponsive. 
-To mitigate this issue, we implemented a delay of 500 ms. This was chosen through binary search. 
-A value too low results in unresponsive behavior, while a value too high make the system too sensitive to noise. 
-Ultimately, this approach ensures reliable data reception from the MPU6050, balancing responsiveness and stability in the presence of noise.
+We are aware of the problem, and we know that if we are using the method of manipulating I2C instead of using library would mitigate the issue, 
+but since we have implemented the whole project already, we afraid migrating the implementation would be time-consuming and raise incompatibilities.
+So we just flash the code until it works. Haha
 
 \section{Conclusion}
-To sum up, our last work was to create a working prototype of a laser turret that utilizes a gyroscopic system based off the MPU6050 sensor and the Tiva C LaunchPad. 
-This achievement was possible due to the structured sequence of activities which included collecting, 
-processing and transmitting data in such a way that the system was able to point a laser at any direction 
-accordingly to the movement.
-\\\\
-Even with problems arising with data consistency, the timing of communications and noise sources, 
-we were still able to rectify problems by adopting a more pliable approach to problems during the iterations 
-which then greatly increased system performances. The given project increased our level of development in embedded systems, 
-while participating as well and working in a team. Overall, the hardware-software integration in mobile systems was a great 
-experience for us, and, no doubt, will lay down a solid base for us in similar projects shortly.
+To sum up, we have successfully implemented a responsive laser turret that can capture the motion of hand and reflect it to the laser turret wirelessly.
+\newline
+Before working on this project, we have expected that the most challenging part would be the motion capturing part. 
+But surprisingly, we found that the most challenging part was actually the data transmission part, which we have to ensure the data integrity and stability.
+Through this iterative process of design, implementation, and debugging, we have gained valuable insights into embedded systems development. 
+These experiences and lessons learned will prove invaluable for future embedded systems projects encountered.
 
 \end{document}
