@@ -19,6 +19,7 @@
 \usepackage{bookmark}
 \usepackage{float}
 \usepackage{listings}
+\usepackage{tabularx}
 
 %% Constants %%
 
@@ -135,6 +136,10 @@
 
 %% tcolorbox Environments %%
 
+\newenvironment{sol}
+{\par\noindent\textbf{Solution:}\par}
+{\par}
+
 \tcolorboxenvironment{sol}{
     boxrule=0pt,
     sharp corners,
@@ -155,6 +160,16 @@
     beforeafter skip balanced=15pt,
     colback={White!90!CornflowerBlue},
     borderline west={3pt}{0pt}{NavyBlue!80!white}
+}
+
+\definecolor{main}{HTML}{5989cf}    % setting main color to be used
+\definecolor{sub}{HTML}{cde4ff}     % setting sub color to be used
+\newtcolorbox{boxH}{
+    colback = sub, 
+    colframe = main, 
+    sharp corners,
+    boxrule = 0pt, 
+    leftrule = 6pt % left rule weight
 }
 
 %% Show code and output %%

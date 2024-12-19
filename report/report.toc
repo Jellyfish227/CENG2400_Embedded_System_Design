@@ -1,0 +1,13 @@
+\contentsline {section}{\numberline {1}Introduction}{2}{section.1}%
+\contentsline {section}{\numberline {2}Division of Work}{2}{section.2}%
+\contentsline {section}{\numberline {3}Chanllenges during implementation}{2}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Transmission of Data}{2}{subsection.3.1}%
+\contentsline {subsubsection}{\numberline {3.1.1}First edition of data transmission formatting}{3}{subsubsection.3.1.1}%
+\contentsline {subsubsection}{\numberline {3.1.2}Second edition of data transmission formatting}{3}{subsubsection.3.1.2}%
+\contentsline {subsubsection}{\numberline {3.1.3}Slave end: data receiving error checking}{3}{subsubsection.3.1.3}%
+\contentsline {subsubsection}{\numberline {3.1.4}Slave end: try using lock to make data receiving atomic}{4}{subsubsection.3.1.4}%
+\contentsline {subsubsection}{\numberline {3.1.5}Slave end: use polling to receive data instead of interrupt}{4}{subsubsection.3.1.5}%
+\contentsline {subsubsection}{\numberline {3.1.6}Slave end: data integrity checking}{4}{subsubsection.3.1.6}%
+\contentsline {subsubsection}{\numberline {3.1.7}Final adjustment}{5}{subsubsection.3.1.7}%
+\contentsline {subsection}{\numberline {3.2}MPU Connection}{5}{subsection.3.2}%
+\contentsline {section}{\numberline {4}Conclusion}{6}{section.4}%

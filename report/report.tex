@@ -6,19 +6,22 @@
 \usepackage{graphicx}				% For including figure/image
 \usepackage{cancel}					% To use the slash to cancel out stuff in work
 \usepackage{multirow}
+\usepackage{lastpage}
 
 %%%%%%%%%%%%%%%%%%%%%%
 % Set up fancy header/footer
 \pagestyle{fancy}
-\setlength{\headheight}{42pt}
-\fancyhead[LO,L]{Name: Yu Ching Hei\\SID: 1155193237\\email: chyu2@cse.cuhk.edu.hk}
+\setlength{\headheight}{28pt}
+\fancyhead[LO,L]{CENG2400 Embedded System Design\\Author: C.H. Yu, Y.H. Tam, C.W. Leung}
 \fancyhead[CO,C]{}
-\fancyhead[RO,R]{CENG3420 Computer Organization and Design\\Lab 2.2\\Date: \today}
+\fancyhead[RO,R]{Final Project\\Date: \today}
 \fancyfoot[LO,L]{}
 \fancyfoot[CO,C]{}
-\fancyfoot[RO,R]{Page \thepage}
+\fancyfoot[RO,R]{Page \thepage\ of \pageref{LastPage}}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0.4pt}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
 %%%%%%%%%%%%%%%%%%%%%%
 
 \begin{document}
@@ -38,124 +41,223 @@
 		\vspace{6pt}
 		\textbf{\Large Report}\\
         \vspace{6pt}
-        {\large Project Demo Date: 13 Dec 2024}
+        {\large Project Demo Date: 13 Dec 2024}\\
+        {\large Project Report Deadline: 20 Dec 2024 23:59}
 		\vspace{40pt}
 		
         \vspace{15pt}
-		\textbf{\large
+		\textbf{\normalsize
             1155193237 - Yu Ching Hei (chyu2@cse.cuhk.edu.hk)\\
-			Team Mate 2\\
-			Team Mate 3\\}
+			1155223226 - Tam Yiu Hei (1155223226@link.cuhk.edu.hk)\\
+			1155194650 - Leung Chung Wang (1155194650@link.cuhk.edu.hk)\\}
 		\vspace{40pt}
-		\vspace{40pt}
+        \textbf{\large Source code and project history is available on GitHub:}\\
+        \normalsize \url{https://github.com/Jellyfish227/CENG2400_Embedded_System_Design.git}\\
+        \vspace{60pt}
 		\textit{Under the kind guidance of}\\
 		\textbf{\large Prof. Yang Ming Chang}\\
-		
-		
-		\vspace{40pt}
+		\vspace{20pt}
+        \textit{Thank you for the help provided also by teaching assistants}\\
+		\textbf{\large Prof. Yang Ming Chang}
 		
 	\end{center}
 \end{titlepage}
+\setcounter{page}{2}
+\tableofcontents
+\section{Introduction}
+The CENG2400 final project involved implementing a gyroscope-controlled laser turret 
+that uses the MPU6050 to direct the laser. Our goal was to create a responsive turret for maximizing hits.
 
-\begin{qNoMark}
-Implement an RISCV-LC ISA Simulator. 
-\end{qNoMark}
+\noindent The workflow consists of two phases:
+\begin{enumerate}
+    \item \textbf{Master End:} We collect and process gyro and accelerometer 
+          data from the \\MPU6050, then transmit the calculated angles via UART.
+    \item \textbf{Slave End:} The angles are received and converted into PWM 
+          signals to control the servo motors.
+\end{enumerate}
+This report outlines our challenges faced and insights gained during implementation, aiming to deliver a functional motion-controlled laser turret.
 
-\begin{ans}
-\\\indent In this lab, we are going to complete some of the instructions in the sim.c file. 
-There are few main points to mark and it is going to be stated in this lab report. 
-In the following part, I am going to demonstrate how I complete this lab. 
+\section{Division of Work}
+\begin{tabularx}{\textwidth}{|l||X|}
+    \hline
+    \textbf{Task} & \textbf{Person In Charge} \\
+    \hline\hline
+    \textbf{Master End} & \textbf{Yu Ching Hei, Tam Yiu Hei} \\
+    \hline
+    \textbf{Slave End} & \textbf{Yu Ching Hei, Leung Chung Wang} \\
+    \hline
+    \textbf{Report} & \textbf{Yu Ching Hei, Tam Yiu Hei, Leung Chung Wang} \\
+    \hline
+\end{tabularx}
 
-Let's say we have to complete the \texttt{handle\_slli} function: 
-Since we know that it is a I-type instructions, we can refer to the sample implementation of the \texttt{handle\_addi} function
+\section{Chanllenges during implementation}
+\subsection{Transmission of Data}
+\subsubsection{First edition of data transmission formatting}\text{}
 \begin{code}
-void handle_addi(unsigned int cur_inst) {
-    unsigned int rd = MASK11_7(cur_inst), rs1 = MASK19_15(cur_inst);
-    int imm12 = sext(MASK31_20(cur_inst), 12);
-    NEXT_LATCHES.REGS[rd] = CURRENT_LATCHES.REGS[rs1] + imm12;
+/* Commit hash: , main_mpu.c*/
+void sendData(float yawAngle, float pitchAngle) {
+    char data[22];
+    sprintf(data, "%.10f,%.10f", yawAngle, pitchAngle);
+    char* chp = data;
+    while (*chp) 
+        UARTCharPut(UART5_BASE, *chp++);
+}
+\end{code}\text{}\\
+In this initial implementation, we formatted the yaw and pitch angles into a string using sprintf. 
+While this allowed us to send the angles with high precision (10 decimal places), 
+it led to challenges in data integrity when multiple messages were sent in quick succession. 
+The function did not account for the timing of data transmission, resulting in potential overlaps 
+or losses.
+\subsubsection{Second edition of data transmission formatting}\text{}
+\begin{code}
+/* Commit hash: , main_mpu.c */
+void sendData(float yawAngle, float pitchAngle) {
+    /* Previous code*/
+    while (* chp )
+        UARTCharPut(UART5_BASE ,*chp++);
+    UARTCharPut(UART5_BASE, '\n'); // Send newline character to mark end of transmission
 }
 \end{code}
-since the parsing is the same for all integer R-I instructions, but only differs by the logic, I just have to modify line 4
-by changing the ``\texttt{+}'' operator to other operators like ``$\ll$'' for \texttt{slli}, ``$\wedge$'' for \texttt{ori} etc. 
-Basically most integer R-I instructions like \texttt{slli, xori, srli, ori, andi, lui} can be implemented in the same way except \texttt{srai}. 
-\\Since the result of \texttt{srai} instruction is MSB-extended, we have to put the result into the \texttt{sext()} fucntion before storing it into the rd. 
-\begin{verbatim}
-    NEXT_LATCHES.REGS[rd] = sext(CURRENT_LATCHES.REGS[rs1] >> imm5, 32);
-\end{verbatim}
+\textbf{}\\
+In this update, we added a newline character to indicate the end of the transmission. 
+However, we still faced issues with the second set of data arriving before the first could 
+be processed, leading to instability. Ensuring that data was transmitted and received in an 
+orderly manner became a critical challenge.
 
-
-\indent Then we have the integer R-R type instructions. These instructions implement R-Type format. So we are refering to the R-Type instruction example
+\subsubsection{Slave end: data receiving error checking}\text{}
 \begin{code}
-void handle_add(unsigned int cur_inst) {
-    unsigned int rd = MASK11_7(cur_inst),
-                rs1 = MASK19_15(cur_inst),
-                rs2 = MASK24_20(cur_inst);
-    NEXT_LATCHES.REGS[rd] = CURRENT_LATCHES.REGS[rs1] 
-                            + CURRENT_LATCHES.REGS[rs2];
+/* Commit hash: , main_servo.c */
+while (true) {
+    degreeArr[0] = atoi(charYaw);
+    degreeArr[1] = atoi(charPitch);
+
+    if (degreeArr[0] != prevAngle[0] || degreeArr[1] != prevAngle[1]) {
+        yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
+        pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
+        prevAngle[0] = degreeArr[0];
+        prevAngle[1] = degreeArr[1];
+    }
 }
-\end{code}
-To complete the R-Type instructions, it shares the same idea of I type, 
-by changing the ``\texttt{+}'' operator in line 6 to other operators like ``$\ll$'' for \texttt{sll}, ``$\wedge$'' for \texttt{or} etc. 
-Same for R-R instructions, \texttt{sra} requires special handling as it has MSB-extended return value. 
-so the last line becomes
-\begin{verbatim}
-        NEXT_LATCHES.REGS[rd] = sext(CURRENT_LATCHES.REGS[rs1] 
-                            >> CURRENT_LATCHES.REGS[rs2], 32);
-\end{verbatim}
-For unconditional jump \texttt{JAL}, it uses J-Type format which has the 20-bit jimm20 specially formatted into the form 
-of $[20|10:1|11|19:12]$. Therefore, there is no simple masking but we have to mask the current instruction binary stream part by part. 
-The construction of jump immediate is done as below: 
-\begin{code}
-int imm20 = (MASK19_12(cur_inst) << 12);
-    imm20 += (MASK20(cur_inst) << 11);
-    imm20 += (MASK30_21(cur_inst) << 1);
-    imm20 += (MASK31(cur_inst) << 20);
-\end{code}
-then the PC + 4 of current state will be stored into the rd if provided
-and the sign-extended jump immediate is added to the current PC as a offset then stored to 
-the PC of next state to let the FSM jump to the desire location in the next state
+\end{code}\text{}\\
+Here, we attempted to integrate servo control with the received angle data. 
+The logic was incomplete, and we needed to ensure that the correct angles were sent to the servo 
+controller without data loss. The challenge was ensuring that data from the UART was processed correctly 
+before new data was received, especially when the system was under load.
 
-For unconditional jump \texttt{JALR}, is uses I-Type format so it shares the same parsing format as the I-Type as implemented in the previous part. 
-But the main different is we are jumping to an address reletive to an address stored in register. Therefore, instead of adding the jump offest directly to the 
-next state PC, the next state PC is set to the address stored in rs1 that is offset by the immediate value. 
-
-For conditional branches, there is a given example of beq, so we can just mimic the parsing logic done in beq and change the branching logic
+\subsubsection{Slave end: try using lock to make data receiving atomic}\text{}
 \begin{code}
-void handle_beq(unsigned int cur_inst) {
-    unsigned int rs1 = MASK19_15(cur_inst), rs2 = MASK24_20(cur_inst);
-    int imm12 = (MASK31(cur_inst) << 12) + \
-            (MASK7(cur_inst) << 11) + \
-            (MASK30_25(cur_inst) << 5) + \
-            (MASK11_8(cur_inst) << 1);
-    if (CURRENT_LATCHES.REGS[rs1] == CURRENT_LATCHES.REGS[rs2])
-        NEXT_LATCHES.PC = (sext(imm12, 12) + CURRENT_LATCHES.PC);
+/* Commit hash: , main_servo.c */
+void UART5IntHandler(void) {
+    uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
+    UARTIntClear(UART5_BASE, ui32Status);
+    isFinished = 0; // Reset flag
+
+    uint32_t charCount = 0;
+    if (processLock) {
+        char b = UARTCharGet(UART5_BASE);
+        charCount++;
+    }
+    isFinished = 1;
+    processLock = 0; // Release lock
 }
-\end{code}
-we just have to modify the ``\texttt{+}'' in line 8 to implement different branching logic like ``\texttt{!=}'' for \texttt{bne}, ``\texttt{>=}'' for \texttt{bge} and
-``\texttt{<}'' for \texttt{blt}. 
+\end{code}\text{}\\
+In this attempt, we introduced a locking mechanism to handle data reception more effectively. 
+This approach aimed to prevent data loss by ensuring that the system only processed one set of data 
+at a time. However, we still faced issues with data integrity, especially when the UART buffer was 
+filled with new incoming data before the previous data was fully processed.
 
-For load instructions, they are in I-Type format so the parsing is the same as implemented in the previous part. 
-By following the example of the \texttt{lb}, we can formulate the instructions to read the memory from the address that is offset by the immediate. 
-After retrieving the value from the memory, I applied corresponding masking fucntion to the value so that the output will be of the desired length. 
-
-For store instructions, they have similar instruction parsing as the conditional branch instructions, so the main focus will be the storing mechanism. 
-This is the implementation of my \texttt{handle\_sw} fucntion. 
-
+\subsubsection{Slave end: use polling to receive data instead of interrupt}\text{}
 \begin{code}
-void handle_sw(unsigned int cur_inst) {
-    unsigned int rs1 = MASK19_15(cur_inst), rs2 = MASK24_20(cur_inst);
-    int imm12 = (MASK11_7(cur_inst));
-    imm12 += (MASK31_25(cur_inst) << 5);
-    int startAddr = CURRENT_LATCHES.REGS[rs1] + sext(imm12, 12);
-    MEMORY[startAddr] = (MASK7_0(CURRENT_LATCHES.REGS[rs2]));
-    MEMORY[startAddr + 1] = (MASK15_8(CURRENT_LATCHES.REGS[rs2]));
-    MEMORY[startAddr + 2] = (MASK23_16(CURRENT_LATCHES.REGS[rs2]));
-    MEMORY[startAddr + 3] = (MASK31_24(CURRENT_LATCHES.REGS[rs2]));
+/* Commit hash: , main_mpu.c */ //FIXME: wrong code included
+void sendData(int yawAngle, int pitchAngle) {
+    char data[8]; // Increased buffer size for safety
+    while (!UARTSpaceAvail(UART5_BASE)) {}
+    snprintf(data, sizeof(data), "%03.0f,%03.0f", roundf(yawAngle), roundf(pitchAngle));
+    char *chp = data;
+    while (*chp) {
+        UARTCharPut(UART5_BASE, *chp++);
+    }
+    UARTCharPut(UART5_BASE, '/'); // End of data
 }
-\end{code}
-In my code, I have separated the data to be stored to the memory into 4 different sections and store 
-them into the memory byte by byte separately. For word(32-bit), split into 4 chunks; for half(16-bit), split into 2 chunks. 
+\end{code}\text{}\\
+We decided to use a polling mechanism instead of relying on interrupts to avoid data integrity issues. 
+By sending the yaw and pitch angles as ASCII characters followed by a delimiter (/), 
+we aimed to ensure that each data packet was correctly terminated. 
+However, ensuring that no data was lost during transmission remained a challenge.
 
-\end{ans}
+\subsubsection{Slave end: data integrity checking}\text{}
+\begin{code}
+/* Commit hash: , main_servo.c */
+while (true) {
+    while (UARTCharsAvail(UART5_BASE)) {
+        char b = UARTCharGet(UART5_BASE);
+        degreeArr[isPitch] = b;
+        isPitch = !isPitch;
+        idx++;
+        if (b == '/' && idx % 3 != 0) {
+            // Logic to ensure data is valid
+        }
+    }
+}
+\end{code}\text{}\\
+In this code, we implemented checks to verify the integrity of received data. 
+We ensured that only complete and correctly formatted data packets were processed by checking for start and end indicators. 
+However, we still faced challenges in ensuring that the data received from the MPU6050 sensor was not corrupted by noise, 
+often leading to missed or incorrect angle readings.
+
+\subsubsection{Final adjustment}\text{}
+\begin{code}
+/* Commit hash: , main_mpu.c */
+char const START_INDICATOR = 254;
+char const END_INDICATOR = 255;
+void sendData(int yawAngle, int pitchAngle) {
+    while (!UARTSpaceAvail(UART5_BASE)) {}
+    UARTCharPut(UART5_BASE, START_INDICATOR);
+    UARTCharPut(UART5_BASE, (yawAngle >> 8) & 0xFF);
+    UARTCharPut(UART5_BASE, yawAngle & 0xFF);
+    UARTCharPut(UART5_BASE, (pitchAngle >> 8) & 0xFF);
+    UARTCharPut(UART5_BASE, pitchAngle & 0xFF);
+    while (!UARTSpaceAvail(UART5_BASE)) {
+        UARTCharPut(UART5_BASE, END_INDICATOR);
+    }
+}
+\end{code}\text{}\\
+In the final adjustments, we emphasized starting and ending indicators for each data transmission. 
+By sending the yaw and pitch angles as separate bytes, we improved the clarity of the data being transmitted. 
+This method aimed to reduce confusion and ensure that the receiving end could accurately reconstruct the angles. 
+Through this iterative process, we learned the importance of robust error handling and effective communication strategies in embedded systems.
+
+\subsection{MPU Connection}
+\text{}\\
+In our project, we faced challenges due to noise interference in receiving data from the MPU6050 sensor. 
+The flag g$\_$bMPU6050Done is used to indicate when the sensor has been successfully initialized, 
+but due to noise, this flag often failed to be set, causing the system to hang indefinitely. 
+\begin{code}
+/* Commit hash: , main_mpu.c */
+g_bMPU6050Done = false;
+MPU6050Init(&sMPU6050, &g_sI2CMSimpleInst, 0x68, MPU6050Callback, &sMPU6050);
+while (!g_bMPU6050Done) {
+    // Waiting for initialization to complete
+}
+\end{code}\text{}\\
+On the above code, the while loop waits for g$\_$bMPU6050Done to turn true. 
+However, due to noise, this flag might never be set, leading to a situation where the system appears unresponsive. 
+To mitigate this issue, we implemented a delay of 500 ms. This was chosen through binary search. 
+A value too low results in unresponsive behavior, while a value too high make the system too sensitive to noise. 
+Ultimately, this approach ensures reliable data reception from the MPU6050, balancing responsiveness and stability in the presence of noise.
+
+\section{Conclusion}
+To sum up, our last work was to create a working prototype of a laser turret that utilizes a gyroscopic system based off the MPU6050 sensor and the Tiva C LaunchPad. 
+This achievement was possible due to the structured sequence of activities which included collecting, 
+processing and transmitting data in such a way that the system was able to point a laser at any direction 
+accordingly to the movement.
+\\\\
+Even with problems arising with data consistency, the timing of communications and noise sources, 
+we were still able to rectify problems by adopting a more pliable approach to problems during the iterations 
+which then greatly increased system performances. The given project increased our level of development in embedded systems, 
+while participating as well and working in a team. Overall, the hardware-software integration in mobile systems was a great 
+experience for us, and, no doubt, will lay down a solid base for us in similar projects shortly.
 
 \end{document}
