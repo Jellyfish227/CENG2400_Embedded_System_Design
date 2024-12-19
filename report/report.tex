@@ -97,9 +97,9 @@ This report outlines our challenges faced and insights gained during implementat
     \hline
     \textbf{Task} & \textbf{Person In Charge} \\
     \hline\hline
-    \textbf{Master End} & \textbf{Yu Ching Hei, Tam Yiu Hei} \\
+    \textbf{Master End} & \textbf{Yu Ching Hei, Tam Yiu Hei, Leung Chung Wang} \\
     \hline
-    \textbf{Slave End} & \textbf{Yu Ching Hei, Leung Chung Wang} \\
+    \textbf{Slave End} & \textbf{Yu Ching Hei, Tam Yiu Hei} \\
     \hline
     \textbf{Report} & \textbf{Yu Ching Hei, Tam Yiu Hei, Leung Chung Wang} \\
     \hline
@@ -107,11 +107,12 @@ This report outlines our challenges faced and insights gained during implementat
 
 \section{Chanllenges during implementation}
 \subsection{Transmission of Data}
-\subsubsection{First edition of data transmission formatting}\text{}
+\subsubsection{Master end: First edition of data transmission formatting}\text{}
 \begin{code}
-/* Commit hash: , main_mpu.c*/
+/* Commit hash: c6e8ed6, main_mpu.c*/
 void sendData(float yawAngle, float pitchAngle) {
     char data[22];
+    // format the data as a string
     sprintf(data, "%.10f,%.10f", yawAngle, pitchAngle);
     char* chp = data;
     while (*chp) 
@@ -120,48 +121,66 @@ void sendData(float yawAngle, float pitchAngle) {
 \end{code}\text{}\\
 In this initial implementation, we formatted the yaw and pitch angles into a string using sprintf. 
 While this allowed us to send the angles with high precision (10 decimal places), 
-it led to challenges in data integrity when multiple messages were sent in quick succession. 
-The function did not account for the timing of data transmission, resulting in potential overlaps 
-or losses.
-\subsubsection{Second edition of data transmission formatting}\text{}
+the long string to be sent over UART wirelessly increases the risk of data loss. And turns out during the testing, 
+we found that the data received was very unstable, we have presumed that the problem is due to the data being sent is too long, 
+which means there are more characters that can potentially be lost, and just one character lost can cause the whole data to be corrupted.
+
+\subsubsection{Master end: Second edition of data transmission formatting}\text{}
 \begin{code}
-/* Commit hash: , main_mpu.c */
+/* Commit hash: af09000, main_mpu.c */
 void sendData(float yawAngle, float pitchAngle) {
-    /* Previous code*/
-    while (* chp )
-        UARTCharPut(UART5_BASE ,*chp++);
-    UARTCharPut(UART5_BASE, '\n'); // Send newline character to mark end of transmission
+    char data[7]; 
+    sprintf(data, "%03d%03d\0", (int)yawAngle, (int)pitchAngle);
+    /* same send looping as before*/
+    UARTCharPut(UART5_BASE, '\n'); // '\n' to mark end of transmission
 }
 \end{code}
 \textbf{}\\
-In this update, we added a newline character to indicate the end of the transmission. 
-However, we still faced issues with the second set of data arriving before the first could 
-be processed, leading to instability. Ensuring that data was transmitted and received in an 
-orderly manner became a critical challenge.
+In this update, we have made 2 important changes:
+\begin{enumerate}
+    \item We have changed the data string to be a string of 7 characters, which is a lot shorter than the previous 22 characters.
+    \item We have added a newline character to indicate the end of the transmission, which is a simple way to check the data integrity.
+\end{enumerate}
+We decided to sacrifice the precision of the data to just send the integral part of the angle, 
+in order to reduce the risk of data corruption due to data loss during transmission. 
+And in the previous implementation, we found that we have no way to check the data integrity, 
+so we have to add a newline character to indicate the end of the transmission.
+However, the problem was not fixed, in the slave end, we found that the data received was still very unstable, 
+we noticed that sometimes the data received would swap their positions(i.e. the yaw angle would be the pitch angle and vice versa), 
+or sometimes some digits that should be in the pitch angle would appears in the array of yaw angle characters received.
+Therefore, we started to investigate in the slave end.
 
-\subsubsection{Slave end: data receiving error checking}\text{}
+\subsubsection{Slave end: wrongly assumed the problem is during data unpacking}\text{}
 \begin{code}
-/* Commit hash: , main_servo.c */
-while (true) {
-    degreeArr[0] = atoi(charYaw);
-    degreeArr[1] = atoi(charPitch);
-
-    if (degreeArr[0] != prevAngle[0] || degreeArr[1] != prevAngle[1]) {
-        yaw_duty_cycle = angleToPWMDutyCycle(degreeArr[0]);
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * yaw_duty_cycle);
-        pitch_duty_cycle = angleToPWMDutyCycle(degreeArr[1]);
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, PWMGenPeriodGet(PWM1_BASE, PWM_GEN_0) * pitch_duty_cycle);
-        prevAngle[0] = degreeArr[0];
-        prevAngle[1] = degreeArr[1];
+/* Commit hash: 7f6934b, main_servo.c */
+void UART5IntHandler(void) {
+    uint32_t ui32Status = UARTIntStatus(UART5_BASE, true);
+    UARTIntClear(UART5_BASE, ui32Status);
+    uint32_t charCount = 0;
+    while (UARTCharsAvail(UART5_BASE)) {
+        char b = UARTCharGet(UART5_BASE);
+        if (charCount < 3) {
+            charYaw[charCount] = b;
+        } else if (charCount < 6) {
+            charPitch[charCount - 3] = b;
+        }
+        charCount++;
     }
 }
 \end{code}\text{}\\
-Here, we attempted to integrate servo control with the received angle data. 
-The logic was incomplete, and we needed to ensure that the correct angles were sent to the servo 
-controller without data loss. The challenge was ensuring that data from the UART was processed correctly 
-before new data was received, especially when the system was under load.
+In the original version of slave end code, we used an interrupt to receive data from the UART. 
+We just called the interrupt handler to put the received character into two separate arrays. 
+And we traslate the character array into integer in the main loop by calling atoi().
+When we are testing the code in debug mode, we found that the integral data was wrong, 
+so we assumed it is the problem to translate it separately in other loop, so we moved the 
+\begin{verbatim}
+    degreeArr[0] = atoi(charYaw);
+    degreeArr[1] = atoi(charPitch);
+\end{verbatim}
+into the interrupt handler, and we found that the integral data was still incorrect, 
+which means that the wrong data was not due to the conversion process but the character receiving process instead.
 
-\subsubsection{Slave end: try using lock to make data receiving atomic}\text{}
+\subsubsection{Slave end: investigating receive logic by locking or raising flags}\text{}
 \begin{code}
 /* Commit hash: , main_servo.c */
 void UART5IntHandler(void) {

@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2024/Homebrew) (preloaded format=pdflatex 2024.10.29)  19 DEC 2024 18:28
+This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2024/Homebrew) (preloaded format=pdflatex 2024.10.29)  19 DEC 2024 20:06
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -888,7 +888,7 @@ File: lstlang1.sty 2024/02/21 1.10 listings language file
 ) (/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/tex/latex/listings/lstmisc.sty
 File: lstmisc.sty 2024/02/21 1.10 (Carsten Heinz)
 ) [2] [3] [4] [5]
-Underfull \hbox (badness 10000) in paragraph at lines 267--277
+Underfull \hbox (badness 10000) in paragraph at lines 286--296
 
  []
 
@@ -901,18 +901,18 @@ L3 programming layer <2024-02-20>
  ***********
  ) 
 Here is how much of TeX's memory you used:
- 32504 strings out of 474116
- 647714 string characters out of 5732612
- 2163187 words of memory out of 5000000
- 54177 multiletter control sequences out of 15000+600000
+ 32488 strings out of 474116
+ 647447 string characters out of 5732612
+ 2159187 words of memory out of 5000000
+ 54157 multiletter control sequences out of 15000+600000
  567698 words of font info for 71 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 116i,13n,121p,867b,2127s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 116i,13n,121p,937b,2127s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/type1/public/amsfonts/cm/cmbxti10.pfb></opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb>
-Output written on report.pdf (6 pages, 246006 bytes).
+Output written on report.pdf (6 pages, 250164 bytes).
 PDF statistics:
- 276 PDF objects out of 1000 (max. 8388607)
- 251 compressed objects within 3 object streams
- 116 named destinations out of 1000 (max. 500000)
+ 280 PDF objects out of 1000 (max. 8388607)
+ 255 compressed objects within 3 object streams
+ 120 named destinations out of 1000 (max. 500000)
  122 words of extra memory for PDF output out of 10000 (max. 10000000)
 

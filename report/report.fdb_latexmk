@@ -1,6 +1,6 @@
 # Fdb version 4
-["pdflatex"] 1734604114.23029 "/Users/jellyfish/Documents/CUHK/Year_3/Fall/CENG2400_Embedded_System_Design/report/report.tex" "report.pdf" "report" 1734604115.46295 0
-  "/Users/jellyfish/Documents/CUHK/Year_3/Fall/CENG2400_Embedded_System_Design/report/report.tex" 1734604114.03203 11761 4a140adc6a08077675ad6cd782ee235f ""
+["pdflatex"] 1734609988.27695 "/Users/jellyfish/Documents/CUHK/Year_3/Fall/CENG2400_Embedded_System_Design/report/report.tex" "report.pdf" "report" 1734609989.48371 0
+  "/Users/jellyfish/Documents/CUHK/Year_3/Fall/CENG2400_Embedded_System_Design/report/report.tex" 1734609988.08797 13152 3a5e3621ff7b554685cfe3ca2fd72638 ""
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/map/fontname/texfonts.map" 1710106625 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/map/pdftex/updmap/pdftex.map" 1710106625 5472554 f7861620179a71a79d4bd86251f559d0 ""
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy6.tfm" 1710106625 1124 14ccf5552bc7f77ca02a8a402bea8bfb ""
@@ -228,11 +228,11 @@
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/tex/latex/xkeyval/xkeyval.sty" 1710106625 4937 4ce600ce9bd4ec84d0250eb6892fcf4f ""
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-dist/web2c/texmf.cnf" 1710106625 41652 e14926ab86fde7902cad99d9eeaa5ca5 ""
   "/opt/homebrew/Cellar/texlive/20240312_3/share/texmf-var/web2c/pdftex/pdflatex.fmt" 1710106625 8221880 586024644079ee3bb0c221d6d52d1611 ""
-  "figs/Emblem_of_CU.png" 1734603942.46537 180701 8150a4c40057f359da05258868ade7fc ""
-  "homework.sty" 1734596958.83325 5153 8614abd5045430a9f601891d2758f65f ""
-  "report.aux" 1734604115.38066 7664 a3a9a8e09b17759aaacc5b747d92c6ec "pdflatex"
-  "report.tex" 1734604114.03203 11761 4a140adc6a08077675ad6cd782ee235f ""
-  "report.toc" 1734604115.38308 1288 e1dd17b65cdf7dc41099d8fe9572ca54 "pdflatex"
+  "figs/Emblem_of_CU.png" 1734604551.5042 180701 8150a4c40057f359da05258868ade7fc ""
+  "homework.sty" 1734604551.50462 5153 8614abd5045430a9f601891d2758f65f ""
+  "report.aux" 1734609989.39789 8350 ebe624c5a6df857917c4883a617c1285 "pdflatex"
+  "report.tex" 1734609988.08797 13152 3a5e3621ff7b554685cfe3ca2fd72638 ""
+  "report.toc" 1734609989.40042 1346 50d221ba05853ba52dd57b13c03a67d1 "pdflatex"
   (generated)
   "report.aux"
   "report.log"
